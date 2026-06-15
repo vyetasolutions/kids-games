@@ -1,27 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vyeta Kids Challenge</title>
 
 <style>
 body {
     margin: 0;
-    font-family: "Arial", sans-serif;
-    background: linear-gradient(135deg, #6dd5fa, #2980b9);
-    color: #fff;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #74ebd5, #ACB6E5);
+    color: #333;
     text-align: center;
 }
 
 h1 {
-    margin-top: 20px;
-    font-size: 28px;
+    margin: 10px;
+    color: #fff;
 }
 
 .screen {
     display: none;
-    padding: 20px;
+    padding: 15px;
 }
 
 .active {
@@ -29,72 +29,73 @@ h1 {
 }
 
 .card {
-    background: rgba(255,255,255,0.15);
+    background: white;
     padding: 20px;
     margin: 15px auto;
-    border-radius: 15px;
+    border-radius: 20px;
     max-width: 500px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
 }
 
-button {
-    padding: 12px 18px;
-    margin: 8px;
-    border: none;
+.player-btn {
+    padding: 10px;
+    margin: 5px;
     border-radius: 10px;
-    font-size: 16px;
-    cursor: pointer;
-}
-
-.choice {
-    background: #fff;
-    color: #333;
-}
-
-.choice:hover {
+    border: none;
     background: #f1f1f1;
 }
 
 .start-btn {
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: none;
     background: #2ecc71;
     color: white;
-}
-
-.next-btn {
-    background: #f39c12;
-    color: white;
-}
-
-.player-btn {
-    background: #fff;
-    color: #333;
-}
-
-.active-player {
-    border: 3px solid yellow;
-}
-
-input {
-    padding: 10px;
-    border-radius: 8px;
-    border: none;
     font-size: 16px;
-    width: 80%;
+}
+
+.option {
+    display: block;
+    padding: 12px;
+    margin: 8px;
+    border-radius: 12px;
+    background: #f7f7f7;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.option:hover {
+    background: #eaeaea;
+}
+
+img.question-img {
+    width: 180px;
+    height: 180px;
+    object-fit: contain;
+    margin: 10px;
+}
+
+.turn {
+    font-size: 18px;
+    font-weight: bold;
+    color: #444;
 }
 </style>
 </head>
 
 <body>
 
-<h1>Vyeta Kids Challenge</h1>
+<h1>Vyeta Kids Challenge 🎮</h1>
 
 <!-- PLAYER SCREEN -->
 <div id="playerScreen" class="screen active">
     <div class="card">
-        <h2>Select Players</h2>
-        <button class="player-btn" onclick="togglePlayer('Amerie')">Amerie</button>
-        <button class="player-btn" onclick="togglePlayer('Patrice')">Patrice</button>
-        <button class="player-btn" onclick="togglePlayer('Phoebe')">Phoebe</button>
+        <h2>Who is playing?</h2>
+
+        <button class="player-btn" onclick="toggle('Amerie')">Amerie</button>
+        <button class="player-btn" onclick="toggle('Patrice')">Patrice</button>
+        <button class="player-btn" onclick="toggle('Phoebe')">Phoebe</button>
+
         <br><br>
         <button class="start-btn" onclick="startGame()">Start Game</button>
     </div>
@@ -103,8 +104,8 @@ input {
 <!-- GAME SCREEN -->
 <div id="gameScreen" class="screen">
     <div class="card">
-        <h2 id="playerTurn"></h2>
-        <h3>Score: <span id="score">0</span></h3>
+        <div class="turn" id="turnText"></div>
+        <div>Score: <span id="score">0</span></div>
     </div>
 
     <div class="card" id="questionBox"></div>
@@ -113,37 +114,35 @@ input {
 <!-- END SCREEN -->
 <div id="endScreen" class="screen">
     <div class="card">
-        <h2>Game Over!</h2>
+        <h2>🎉 Great Job Everyone!</h2>
         <div id="results"></div>
         <button class="start-btn" onclick="location.reload()">Play Again</button>
     </div>
 </div>
 
 <script>
-const players = ["Amerie","Patrice","Phoebe"];
-let selectedPlayers = [];
+let selected = [];
 let scores = {};
-let turnIndex = 0;
-let questionCount = 0;
+let turn = 0;
+let qCount = 0;
 let currentAnswer = "";
 let currentPlayer = "";
 
-function togglePlayer(name){
-    if(selectedPlayers.includes(name)){
-        selectedPlayers = selectedPlayers.filter(p => p !== name);
+function toggle(name){
+    if(selected.includes(name)){
+        selected = selected.filter(p => p !== name);
     } else {
-        selectedPlayers.push(name);
+        selected.push(name);
     }
-    alert("Selected: " + selectedPlayers.join(", "));
 }
 
 function startGame(){
-    if(selectedPlayers.length === 0){
-        alert("Select at least one player");
+    if(selected.length === 0){
+        alert("Pick at least one player!");
         return;
     }
 
-    selectedPlayers.forEach(p => scores[p] = 0);
+    selected.forEach(p => scores[p] = 0);
 
     document.getElementById("playerScreen").classList.remove("active");
     document.getElementById("gameScreen").classList.add("active");
@@ -152,115 +151,115 @@ function startGame(){
 }
 
 function nextPlayer(){
-    currentPlayer = selectedPlayers[turnIndex % selectedPlayers.length];
-    turnIndex++;
+    currentPlayer = selected[turn % selected.length];
+    turn++;
 }
 
 function nextQuestion(){
-    if(questionCount >= 10){
+    if(qCount >= 10){
         endGame();
         return;
     }
 
-    questionCount++;
+    qCount++;
     nextPlayer();
 
-    document.getElementById("playerTurn").innerText = currentPlayer + "'s Turn";
+    document.getElementById("turnText").innerText = currentPlayer + "'s turn";
     document.getElementById("score").innerText = scores[currentPlayer];
 
     let type = Math.floor(Math.random()*3);
 
-    if(type === 0) objectQuestion();
-    if(type === 1) spellingQuestion();
-    if(type === 2) mathQuestion();
+    if(type === 0) objectQ();
+    if(type === 1) spellingQ();
+    if(type === 2) mathQ();
 }
 
-/* OBJECT QUESTION */
-function objectQuestion(){
-    let items = [
-        {q:"Apple", options:["Apple","Banana","Car","Dog"]},
-        {q:"Dog", options:["Cat","Dog","Car","Ball"]},
-        {q:"Car", options:["Bus","Bike","Car","Train"]},
-        {q:"Banana", options:["Apple","Banana","Orange","Chair"]}
+/* IMAGE OBJECTS */
+function objectQ(){
+    let data = [
+        {img:"🍎", ans:"Apple", options:["Apple","Banana","Car","Dog"]},
+        {img:"🐶", ans:"Dog", options:["Cat","Dog","Car","Bus"]},
+        {img:"🚗", ans:"Car", options:["Bike","Car","Train","Plane"]},
+        {img:"🍌", ans:"Banana", options:["Apple","Banana","Orange","Chair"]}
     ];
 
-    let item = items[Math.floor(Math.random()*items.length)];
-    currentAnswer = item.q;
+    let q = data[Math.floor(Math.random()*data.length)];
+    currentAnswer = q.ans;
 
     let html = `<h3>What is this?</h3>`;
+    html += `<div style="font-size:70px;">${q.img}</div>`;
 
-    item.options.forEach(opt=>{
-        html += `<button class='choice' onclick="checkAnswer('${opt}')">${opt}</button>`;
+    q.options.forEach(o=>{
+        html += `<div class='option' onclick="check('${o}')">${o}</div>`;
     });
 
     document.getElementById("questionBox").innerHTML = html;
 }
 
-/* SPELLING QUESTION */
-function spellingQuestion(){
+/* SPELLING */
+function spellingQ(){
     let words = ["APPLE","DOG","CAR","BOOK"];
-    let word = words[Math.floor(Math.random()*words.length)];
-    currentAnswer = word;
+    let w = words[Math.floor(Math.random()*words.length)];
+    currentAnswer = w;
 
-    let hidden = word.split("").map(l => Math.random()>0.5 ? "_" : l).join(" ");
+    let hidden = w.split("").map(l => Math.random()>0.5?"_":l).join(" ");
 
-    let html = `<h3>Spell the word</h3><h2>${hidden}</h2>`;
-    html += `<input id="spellInput" placeholder="Type word"/>`;
-    html += `<br><button class='start-btn' onclick="checkSpelling()">Submit</button>`;
-
-    document.getElementById("questionBox").innerHTML = html;
-}
-
-/* MATH QUESTION */
-function mathQuestion(){
-    let a = Math.floor(Math.random()*20);
-    let b = Math.floor(Math.random()*20);
-    let ops = ["+","-"];
-    let op = ops[Math.floor(Math.random()*ops.length)];
-
-    if(op === "+") currentAnswer = a + b;
-    if(op === "-") currentAnswer = a - b;
-
-    let html = `<h3>Solve</h3><h2>${a} ${op} ${b} = ?</h2>`;
-    html += `<input id="mathInput" type="number" />`;
-    html += `<br><button class='start-btn' onclick="checkMath()">Submit</button>`;
+    let html = `<h3>Can you spell this?</h3>`;
+    html += `<div style="font-size:60px;">🧠</div>`;
+    html += `<h2>${hidden}</h2>`;
+    html += `<input id="inp" placeholder="Type word" style="padding:10px;font-size:16px;">`;
+    html += `<br><br><div class='option' onclick="checkSpell()">Submit</div>`;
 
     document.getElementById("questionBox").innerHTML = html;
 }
 
-/* CHECKS */
-function checkAnswer(ans){
+/* MATH */
+function mathQ(){
+    let a = Math.floor(Math.random()*10);
+    let b = Math.floor(Math.random()*10);
+    let op = ["+","-"][Math.floor(Math.random()*2)];
+
+    currentAnswer = op==="+"?a+b:a-b;
+
+    let html = `<h3>Solve this</h3>`;
+    html += `<div style="font-size:40px;">${a} ${op} ${b}</div>`;
+    html += `<input id="math" type="number" style="padding:10px;">`;
+    html += `<br><br><div class='option' onclick="checkMath()">Submit</div>`;
+
+    document.getElementById("questionBox").innerHTML = html;
+}
+
+/* CHECK */
+function check(ans){
     if(ans === currentAnswer) correct();
     else nextQuestion();
 }
 
-function checkSpelling(){
-    let val = document.getElementById("spellInput").value.toUpperCase();
-    if(val === currentAnswer) correct();
+function checkSpell(){
+    let v = document.getElementById("inp").value.toUpperCase();
+    if(v === currentAnswer) correct();
     else nextQuestion();
 }
 
 function checkMath(){
-    let val = Number(document.getElementById("mathInput").value);
-    if(val === currentAnswer) correct();
+    let v = Number(document.getElementById("math").value);
+    if(v === currentAnswer) correct();
     else nextQuestion();
 }
 
-/* SCORE */
 function correct(){
     scores[currentPlayer] += 10;
-    alert("Correct! +10");
+    document.getElementById("score").innerText = scores[currentPlayer];
     nextQuestion();
 }
 
-/* END GAME */
 function endGame(){
     document.getElementById("gameScreen").classList.remove("active");
     document.getElementById("endScreen").classList.add("active");
 
     let winner = Object.keys(scores).reduce((a,b)=>scores[a]>scores[b]?a:b);
 
-    let html = `<h3>Winner: ${winner}</h3>`;
+    let html = `<h3>🏆 Winner: ${winner}</h3>`;
 
     for(let p in scores){
         html += `<p>${p}: ${scores[p]} points</p>`;
