@@ -6,136 +6,174 @@
 <title>Vyeta Kids Challenge</title>
 
 <style>
-body {
+body{
     margin:0;
     font-family: Arial;
     background: linear-gradient(135deg,#74ebd5,#ACB6E5);
-    text-align:center;
+    overflow:hidden;
 }
 
-h1 { color:white; }
+/* SCREEN SYSTEM */
+.screen{
+    display:none;
+    height:100vh;
+    padding:15px;
+    box-sizing:border-box;
+}
 
-.screen { display:none; padding:20px; }
-.active { display:block; }
+.active{ display:block; }
 
-.card {
+/* GAME LAYOUT */
+.hud{
     background:white;
-    margin:15px auto;
-    padding:20px;
-    max-width:500px;
     border-radius:20px;
-    box-shadow:0 10px 20px rgba(0,0,0,0.1);
-}
-
-/* PLAYER BUTTONS */
-.player-btn {
     padding:12px;
-    margin:6px;
-    border:none;
-    border-radius:12px;
-    background:#eee;
-    cursor:pointer;
+    margin-bottom:10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    box-shadow:0 5px 15px rgba(0,0,0,0.1);
 }
 
-.player-btn.selected {
+.card{
+    background:white;
+    border-radius:25px;
+    padding:20px;
+    box-shadow:0 10px 25px rgba(0,0,0,0.1);
+    text-align:center;
+    animation:pop .3s ease;
+}
+
+@keyframes pop{
+    from{ transform:scale(.95); opacity:.5; }
+    to{ transform:scale(1); opacity:1; }
+}
+
+/* PLAYER SELECT */
+.player{
+    padding:12px;
+    margin:8px;
+    border:none;
+    border-radius:15px;
+    background:#eee;
+    font-size:16px;
+}
+
+.player.selected{
     background:#2ecc71;
     color:white;
 }
 
-/* GAME UI */
-.turn {
-    font-weight:bold;
-    font-size:18px;
+/* GAME ELEMENTS */
+.big{
+    font-size:70px;
 }
 
-.option {
+.option{
     display:block;
-    padding:12px;
-    margin:8px;
-    border-radius:12px;
-    background:#f3f3f3;
+    padding:14px;
+    margin:10px;
+    border-radius:15px;
+    background:#f5f5f5;
+    font-size:18px;
     cursor:pointer;
+    transition:.2s;
 }
 
-.option:hover {
-    background:#e0e0e0;
+.option:hover{
+    background:#e8e8e8;
 }
 
-.big {
-    font-size:60px;
+/* FEEDBACK */
+#feedback{
+    margin-top:10px;
+    font-weight:bold;
+    min-height:20px;
+}
+
+.correct{ color:#2ecc71; }
+.wrong{ color:#e67e22; }
+
+input{
+    padding:12px;
+    font-size:16px;
+    border-radius:12px;
+    border:1px solid #ccc;
+    width:80%;
 }
 </style>
 </head>
 
 <body>
 
-<h1>Vyeta Kids Challenge 🎮</h1>
-
 <!-- PLAYER SCREEN -->
 <div id="playerScreen" class="screen active">
     <div class="card">
-        <h2>Select Players</h2>
+        <h2>🎮 Who is playing?</h2>
 
-        <button id="bA" class="player-btn" onclick="toggle('Amerie','bA')">Amerie</button>
-        <button id="bP" class="player-btn" onclick="toggle('Patrice','bP')">Patrice</button>
-        <button id="bF" class="player-btn" onclick="toggle('Phoebe','bF')">Phoebe</button>
+        <button class="player" id="a" onclick="toggle('Amerie','a')">Amerie</button>
+        <button class="player" id="p" onclick="toggle('Patrice','p')">Patrice</button>
+        <button class="player" id="f" onclick="toggle('Phoebe','f')">Phoebe</button>
 
-        <p id="status">No players selected</p>
+        <p id="status">Select players to start</p>
 
-        <button onclick="start()" style="padding:12px;background:#2ecc71;color:white;border:none;border-radius:10px;">
-            Start Game
+        <button onclick="startGame()" style="padding:12px 20px;border:none;border-radius:15px;background:#2ecc71;color:white;font-size:16px;">
+            Start Adventure 🚀
         </button>
     </div>
 </div>
 
-<!-- GAME -->
+<!-- GAME SCREEN -->
 <div id="gameScreen" class="screen">
-    <div class="card">
-        <div id="turn"></div>
-        Score: <span id="score">0</span>
+
+    <div class="hud">
+        <div id="turn">Player</div>
+        <div>⭐ <span id="score">0</span></div>
     </div>
 
-    <div class="card" id="question"></div>
+    <div class="card" id="gameBox"></div>
 </div>
 
-<!-- END -->
+<!-- END SCREEN -->
 <div id="endScreen" class="screen">
     <div class="card">
-        <h2>🎉 Game Complete!</h2>
-        <div id="result"></div>
-        <button onclick="location.reload()" style="padding:12px;background:#2ecc71;color:white;border:none;border-radius:10px;">
-            Play Again
+        <h2>🎉 Adventure Complete!</h2>
+        <div id="results"></div>
+
+        <button onclick="location.reload()"
+        style="margin-top:10px;padding:12px 20px;border:none;border-radius:15px;background:#2ecc71;color:white;">
+        Play Again
         </button>
     </div>
 </div>
 
 <script>
-let selected = [];
-let scores = {};
-let turn = 0;
-let q = 0;
-let currentPlayer = "";
 
-/* ---------------- PLAYER SELECT ---------------- */
-function toggle(name, btnId){
+let selected=[];
+let scores={};
+let turn=0;
+let q=0;
+let current="";
+let currentAnswer="";
+
+/* ---------------- SELECT ---------------- */
+function toggle(name,id){
+
     if(selected.includes(name)){
-        selected = selected.filter(p=>p!==name);
-        document.getElementById(btnId).classList.remove("selected");
+        selected=selected.filter(x=>x!==name);
+        document.getElementById(id).classList.remove("selected");
     } else {
         selected.push(name);
-        document.getElementById(btnId).classList.add("selected");
+        document.getElementById(id).classList.add("selected");
     }
 
     document.getElementById("status").innerText =
-        selected.length ? "Playing: " + selected.join(", ") : "No players selected";
+    selected.length? "Playing: "+selected.join(", ") : "Select players";
 }
 
 /* ---------------- START ---------------- */
-function start(){
-    if(selected.length===0){
-        alert("Select players first");
-        return;
-    }
+function startGame(){
+    if(selected.length===0) return;
 
     selected.forEach(p=>scores[p]=0);
 
@@ -145,14 +183,15 @@ function start(){
     next();
 }
 
-/* ---------------- TURN SYSTEM ---------------- */
+/* ---------------- TURN ---------------- */
 function nextPlayer(){
-    currentPlayer = selected[turn % selected.length];
+    current = selected[turn % selected.length];
     turn++;
 }
 
-/* ---------------- QUESTION ENGINE ---------------- */
+/* ---------------- GAME LOOP ---------------- */
 function next(){
+
     if(q>=10){
         end();
         return;
@@ -161,10 +200,8 @@ function next(){
     q++;
     nextPlayer();
 
-    document.getElementById("turn").innerText =
-        currentPlayer + "'s turn";
-
-    document.getElementById("score").innerText = scores[currentPlayer];
+    document.getElementById("turn").innerText = "👤 " + current;
+    document.getElementById("score").innerText = scores[current];
 
     let type = q % 3;
 
@@ -173,97 +210,147 @@ function next(){
     if(type===2) object();
 }
 
-/* ---------------- SPELLING (STRUCTURED) ---------------- */
+/* ---------------- SPELLING ENGINE (REAL LEARNING) ---------------- */
 function spelling(){
-    let words = ["APPLE","DOG","CAT","BOOK"];
-    let w = words[Math.floor(Math.random()*words.length)];
 
-    let pattern = w.split("").map((l,i)=>{
-        if(i%2===0) return "_";
-        return l;
+    let words=[
+        {w:"APPLE", img:"🍎"},
+        {w:"DOG", img:"🐶"},
+        {w:"CAR", img:"🚗"},
+        {w:"BOOK", img:"📘"}
+    ];
+
+    let item = words[Math.floor(Math.random()*words.length)];
+
+    // learning structure
+    let pattern = item.w.split("").map((l,i)=>{
+        return i%2===0 ? "_" : l;
     }).join(" ");
 
-    renderQuestion("Spell the word", pattern, w);
+    currentAnswer = item.w;
+
+    document.getElementById("gameBox").innerHTML=`
+        <div class="big">${item.img}</div>
+        <h3>Can you spell this?</h3>
+
+        <h2>${pattern}</h2>
+
+        <input id="input" placeholder="Type word">
+
+        <div class="option" onclick="checkSpell()">Check Answer</div>
+
+        <div id="feedback"></div>
+    `;
 }
 
-/* ---------------- MATH (STRUCTURED) ---------------- */
+/* ---------------- MATH ---------------- */
 function math(){
-    let a = Math.floor(Math.random()*10);
-    let b = Math.floor(Math.random()*10);
-    let answer = a + b;
 
-    renderInput(`${a} + ${b} = ?`, answer);
+    let a=Math.floor(Math.random()*10);
+    let b=Math.floor(Math.random()*10);
+
+    currentAnswer=a+b;
+
+    document.getElementById("gameBox").innerHTML=`
+        <h3>Solve this</h3>
+        <h1>${a} + ${b}</h1>
+
+        <input id="input" type="number">
+
+        <div class="option" onclick="checkMath()">Check Answer</div>
+
+        <div id="feedback"></div>
+    `;
 }
 
 /* ---------------- OBJECT ---------------- */
 function object(){
-    let data = [
-        {img:"🍎", ans:"Apple"},
-        {img:"🐶", ans:"Dog"},
-        {img:"🚗", ans:"Car"}
+
+    let items=[
+        {img:"🍌", ans:"BANANA"},
+        {img:"🐶", ans:"DOG"},
+        {img:"🚗", ans:"CAR"}
     ];
 
-    let o = data[Math.floor(Math.random()*data.length)];
+    let item=items[Math.floor(Math.random()*items.length)];
+    currentAnswer=item.ans;
 
-    let html = `
-        <div class="big">${o.img}</div>
+    document.getElementById("gameBox").innerHTML=`
+        <div class="big">${item.img}</div>
         <h3>What is this?</h3>
-        <div>
-            <div class="option" onclick="check('${o.ans}','${o.ans}')">${o.ans}</div>
-            <div class="option" onclick="check('X','${o.ans}')">Wrong</div>
-            <div class="option" onclick="check('X','${o.ans}')">Wrong</div>
-        </div>
-    `;
 
-    document.getElementById("question").innerHTML = html;
-}
+        <div class="option" onclick="check('DOG')">Dog</div>
+        <div class="option" onclick="check('CAR')">Car</div>
+        <div class="option" onclick="check('${item.ans}')">${item.ans}</div>
 
-/* ---------------- RENDER HELPERS ---------------- */
-function renderQuestion(title, pattern, answer){
-    document.getElementById("question").innerHTML = `
-        <h3>${title}</h3>
-        <h2>${pattern}</h2>
-        <input id="inp">
-        <br><br>
-        <div class="option" onclick="check(document.getElementById('inp').value.toUpperCase(),'${answer}')">
-            Submit
-        </div>
+        <div id="feedback"></div>
     `;
 }
 
-function renderInput(q, answer){
-    document.getElementById("question").innerHTML = `
-        <h3>${q}</h3>
-        <input id="inp" type="number">
-        <br><br>
-        <div class="option" onclick="check(Number(document.getElementById('inp').value),${answer})">
-            Submit
-        </div>
-    `;
+/* ---------------- VALIDATION ---------------- */
+function normalize(v){
+    return String(v||"").toUpperCase().trim();
 }
 
-/* ---------------- CHECK ---------------- */
-function check(val, ans){
-    if(val==ans){
-        scores[currentPlayer]+=10;
+function checkSpell(){
+    let v=normalize(document.getElementById("input").value);
+
+    if(v===currentAnswer){
+        correct();
+    } else {
+        wrong();
     }
-    next();
+}
+
+function checkMath(){
+    let v=Number(document.getElementById("input").value);
+
+    if(v===currentAnswer){
+        correct();
+    } else {
+        wrong();
+    }
+}
+
+function check(v){
+    if(normalize(v)===currentAnswer){
+        correct();
+    } else {
+        wrong();
+    }
+}
+
+/* ---------------- FEEDBACK ---------------- */
+function correct(){
+    scores[current]+=10;
+    document.getElementById("feedback").innerHTML="🎉 Great job!";
+    document.getElementById("feedback").className="correct";
+
+    setTimeout(next,800);
+}
+
+function wrong(){
+    document.getElementById("feedback").innerHTML="😊 Try again!";
+    document.getElementById("feedback").className="wrong";
 }
 
 /* ---------------- END ---------------- */
 function end(){
+
     document.getElementById("gameScreen").classList.remove("active");
     document.getElementById("endScreen").classList.add("active");
 
-    let winner = Object.keys(scores).reduce((a,b)=>scores[a]>scores[b]?a:b);
+    let winner=Object.keys(scores).reduce((a,b)=>scores[a]>scores[b]?a:b);
 
-    let html = `<h3>🏆 Winner: ${winner}</h3>`;
+    let html=`<h3>🏆 Winner: ${winner}</h3>`;
+
     for(let p in scores){
-        html += `<p>${p}: ${scores[p]}</p>`;
+        html+=`<p>${p}: ${scores[p]} ⭐</p>`;
     }
 
-    document.getElementById("result").innerHTML = html;
+    document.getElementById("results").innerHTML=html;
 }
+
 </script>
 
 </body>
