@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vyeta Kwacha Balloon Adventures</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <!-- Import Supabase for the Frontend -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body {
             background: linear-gradient(135deg, #090d16, #111827);
@@ -309,10 +311,38 @@
     <div class="vyeta-footer">Powered by Vyeta Digital Solutions</div>
 
     <script>
-        // CORE CONFIGURATION - UPDATE WITH YOUR LIVE RENDER SERVER LINK
-        const SERVER_URL = "https://kids-games-o79b.onrender.com"; 
-        const socket = io(SERVER_URL);
+        // 1. Initialize Supabase
+        const supabaseUrl = 'https://uccdevvfexfpxnnwtpxa.supabase.co';
+        const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_'; // Replace with your actual key
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
+        // 2. Global Socket Variable
+        let socket;
+        const SERVER_URL = "https://kids-games-o79b.onrender.com"; 
+
+        // 3. The Session Catcher
+        supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+                if (session) {
+                    console.log("Flight deck access granted for:", session.user.email);
+                    
+                    // Connect to the server AND pass the secure VIP token!
+                    socket = io(SERVER_URL, {
+                        auth: {
+                            token: session.access_token 
+                        }
+                    });
+
+                    // Initialize the game connections now that we are verified
+                    initializeGameListeners();
+                } else {
+                    console.log("No active session. Rerouting to gateway.");
+                    window.location.href = "auth.html";
+                }
+            }
+        });
+
+        // --- GLOBAL GAME STATE ---
         let currentBalance = 1000.00;
         let hasBetInRound = false;
         let isInFlight = false;
@@ -654,155 +684,156 @@
             if(historyStrip.children.length > 7) historyStrip.removeChild(historyStrip.lastChild);
         }
 
-        // --- CUSTOMER-ORIENTED SOCKET DISPATCHERS ---
+        // --- GAME EVENT LISTENERS WRAPPER ---
+        function initializeGameListeners() {
+            socket.on('betting_phase_started', () => {
+                stopFlightSound();
+                gameState = 'waiting';
+                isInFlight = false;
+                hasBetInRound = false;
+                globalMultiplier = 1.00;
+                
+                multiplierDisplay.style.color = "#cbd5e1";
+                multiplierDisplay.innerText = "1.00x";
+                
+                actionBtn.className = "btn-bet";
+                actionBtn.innerText = "BUY FLIGHT TICKET";
+                betInput.disabled = false;
 
-        socket.on('betting_phase_started', () => {
-            stopFlightSound();
-            gameState = 'waiting';
-            isInFlight = false;
-            hasBetInRound = false;
-            globalMultiplier = 1.00;
-            
-            multiplierDisplay.style.color = "#cbd5e1";
-            multiplierDisplay.innerText = "1.00x";
-            
-            actionBtn.className = "btn-bet";
-            actionBtn.innerText = "BUY FLIGHT TICKET";
-            betInput.disabled = false;
+                let timeLeft = 6;
+                statusText.innerText = `Boarding... Flight departs in ${timeLeft}s`;
+                statusText.style.color = "#fbbf24";
+                
+                if(countdownTimer) clearInterval(countdownTimer);
+                countdownTimer = setInterval(() => {
+                    timeLeft--;
+                    if(timeLeft > 0) {
+                        statusText.innerText = `Boarding... Flight departs in ${timeLeft}s`;
+                    } else {
+                        clearInterval(countdownTimer);
+                        statusText.innerText = "Releasing safety valves...";
+                    }
+                }, 1000);
+            });
 
-            let timeLeft = 6;
-            statusText.innerText = `Boarding... Flight departs in ${timeLeft}s`;
-            statusText.style.color = "#fbbf24";
-            
-            if(countdownTimer) clearInterval(countdownTimer);
-            countdownTimer = setInterval(() => {
-                timeLeft--;
-                if(timeLeft > 0) {
-                    statusText.innerText = `Boarding... Flight departs in ${timeLeft}s`;
+            socket.on('game_started', () => {
+                if(countdownTimer) clearInterval(countdownTimer);
+                initAudioEngine();
+                startFlightSound();
+                
+                gameState = 'flying';
+                isInFlight = true;
+                statusText.innerText = "We are airborne!";
+                statusText.style.color = "#34d399";
+                multiplierDisplay.style.color = "#34d399";
+
+                if (hasBetInRound) {
+                    actionBtn.className = "btn-cash";
+                    actionBtn.innerText = "COLLECT KWACHA";
                 } else {
-                    clearInterval(countdownTimer);
-                    statusText.innerText = "Releasing safety valves...";
+                    actionBtn.className = "btn-disabled";
+                    actionBtn.innerText = "FLIGHT IN PROGRESS";
                 }
-            }, 1000);
-        });
+            });
 
-        socket.on('game_started', () => {
-            if(countdownTimer) clearInterval(countdownTimer);
-            initAudioEngine();
-            startFlightSound();
-            
-            gameState = 'flying';
-            isInFlight = true;
-            statusText.innerText = "We are airborne!";
-            statusText.style.color = "#34d399";
-            multiplierDisplay.style.color = "#34d399";
+            socket.on('multiplier_tick', (data) => {
+                globalMultiplier = data.multiplier;
+                multiplierDisplay.innerText = data.multiplier.toFixed(2) + "x";
+                updateFlightSound(globalMultiplier);
+                
+                if(globalMultiplier >= 2 && globalMultiplier < 5) {
+                    multiplierDisplay.style.color = "#fbbf24";
+                } else if (globalMultiplier >= 5) {
+                    multiplierDisplay.style.color = "#f87171";
+                }
 
-            if (hasBetInRound) {
-                actionBtn.className = "btn-cash";
-                actionBtn.innerText = "COLLECT KWACHA";
-            } else {
+                if (hasBetInRound) {
+                    const liveWinnings = (parseFloat(betInput.value) * data.multiplier).toFixed(2);
+                    actionBtn.innerText = `COLLECT K${liveWinnings}`;
+                }
+            });
+
+            socket.on('game_crashed', (data) => {
+                if(countdownTimer) clearInterval(countdownTimer);
+                stopFlightSound();
+                playPopSound();
+                
+                gameState = 'crashed';
+                isInFlight = false;
+                globalMultiplier = data.crashedAt;
+                
+                triggerBurstAnimation();
+                appendHistoryBadge(data.crashedAt);
+                
+                statusText.innerText = "Oh no, it popped!";
+                statusText.style.color = "#ef4444";
+                multiplierDisplay.style.color = "#ef4444";
+                multiplierDisplay.innerText = data.crashedAt.toFixed(2) + "x";
+                
                 actionBtn.className = "btn-disabled";
-                actionBtn.innerText = "FLIGHT IN PROGRESS";
-            }
-        });
+                actionBtn.innerText = "FLIGHT ENDED";
+                betInput.disabled = false;
+            });
 
-        socket.on('multiplier_tick', (data) => {
-            globalMultiplier = data.multiplier;
-            multiplierDisplay.innerText = data.multiplier.toFixed(2) + "x";
-            updateFlightSound(globalMultiplier);
-            
-            if(globalMultiplier >= 2 && globalMultiplier < 5) {
-                multiplierDisplay.style.color = "#fbbf24";
-            } else if (globalMultiplier >= 5) {
-                multiplierDisplay.style.color = "#f87171";
-            }
+            socket.on('bet_confirmed', (data) => {
+                hasBetInRound = true;
+                currentBalance = data.balance;
+                balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                actionBtn.className = "btn-disabled";
+                actionBtn.innerText = "TICKET SECURED!";
+                betInput.disabled = true;
+                initAudioEngine(); // Pre-trigger audio focus context window
+            });
 
-            if (hasBetInRound) {
-                const liveWinnings = (parseFloat(betInput.value) * data.multiplier).toFixed(2);
-                actionBtn.innerText = `COLLECT K${liveWinnings}`;
-            }
-        });
+            socket.on('cash_out_success', (data) => {
+                // 📱 Physical haptic feedback
+                if (navigator.vibrate) {
+                    navigator.vibrate([40, 50, 40]);
+                }
 
-        socket.on('game_crashed', (data) => {
-            if(countdownTimer) clearInterval(countdownTimer);
-            stopFlightSound();
-            playPopSound();
-            
-            gameState = 'crashed';
-            isInFlight = false;
-            globalMultiplier = data.crashedAt;
-            
-            triggerBurstAnimation();
-            appendHistoryBadge(data.crashedAt);
-            
-            statusText.innerText = "Oh no, it popped!";
-            statusText.style.color = "#ef4444";
-            multiplierDisplay.style.color = "#ef4444";
-            multiplierDisplay.innerText = data.crashedAt.toFixed(2) + "x";
-            
-            actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "FLIGHT ENDED";
-            betInput.disabled = false;
-        });
+                hasBetInRound = false;
+                currentBalance = data.balance;
+                balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                actionBtn.className = "btn-disabled";
+                actionBtn.innerText = "CASH SECURED!";
+                
+                playCashOutSound();
+                triggerWinAnimation();
+                addLog(`Awesome! You safely collected K${data.winnings.toFixed(2)}`, true);
 
-        socket.on('bet_confirmed', (data) => {
-            hasBetInRound = true;
-            currentBalance = data.balance;
-            balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "TICKET SECURED!";
-            betInput.disabled = true;
-            initAudioEngine(); // Pre-trigger audio focus context window
-        });
+                // 🏆 TRIGGER CENTER SCREEN WIN SPLASH
+                const winSplash = document.getElementById('win-splash');
+                const winSplashAmount = document.getElementById('win-splash-amount');
+                
+                // Format the text and show the splash
+                winSplashAmount.innerText = `+ K${data.winnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                winSplash.classList.add('show');
 
-       socket.on('cash_out_success', (data) => {
-            // 📱 Physical haptic feedback
-            if (navigator.vibrate) {
-                navigator.vibrate([40, 50, 40]);
-            }
+                // Hide the splash safely after 2.5 seconds
+                setTimeout(() => {
+                    winSplash.classList.remove('show');
+                }, 2500);
+            });
 
-            hasBetInRound = false;
-            currentBalance = data.balance;
-            balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "CASH SECURED!";
-            
-            playCashOutSound();
-            triggerWinAnimation();
-            addLog(`Awesome! You safely collected K${data.winnings.toFixed(2)}`, true);
+            socket.on('ledger_update', (data) => {
+                // Map raw server lines into friendly local currency expressions
+                let userMsg = data.message.replace("Player placed a bet of", "A player bought a ticket for K");
+                userMsg = userMsg.replace("Player cashed out", "A player jumped to safety");
+                userMsg = userMsg.replace("wins", "and collected K");
+                addLog(userMsg);
+            });
 
-            // 🏆 TRIGGER CENTER SCREEN WIN SPLASH
-            const winSplash = document.getElementById('win-splash');
-            const winSplashAmount = document.getElementById('win-splash-amount');
-            
-            // Format the text and show the splash
-            winSplashAmount.innerText = `+ K${data.winnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            winSplash.classList.add('show');
+            socket.on('error_message', (data) => { alert(data.message); });
 
-            // Hide the splash safely after 2.5 seconds
-            setTimeout(() => {
-                winSplash.classList.remove('show');
-            }, 2500);
-        });
-
-        socket.on('ledger_update', (data) => {
-            // Map raw server lines into friendly local currency expressions
-            let userMsg = data.message.replace("Player placed a bet of", "A player bought a ticket for K");
-            userMsg = userMsg.replace("Player cashed out", "A player jumped to safety");
-            userMsg = userMsg.replace("wins", "and collected K");
-            addLog(userMsg);
-        });
-
-        socket.on('error_message', (data) => { alert(data.message); });
-
-        actionBtn.addEventListener('click', () => {
-            initAudioEngine(); // Safely unlock browser audio policies
-            if (!isInFlight && !hasBetInRound && actionBtn.className !== "btn-disabled") {
-                socket.emit('place_bet', { amount: betInput.value });
-            } else if (isInFlight && hasBetInRound) {
-                socket.emit('cash_out');
-            }
-        });
+            actionBtn.addEventListener('click', () => {
+                initAudioEngine(); // Safely unlock browser audio policies
+                if (!isInFlight && !hasBetInRound && actionBtn.className !== "btn-disabled") {
+                    socket.emit('place_bet', { amount: betInput.value });
+                } else if (isInFlight && hasBetInRound) {
+                    socket.emit('cash_out');
+                }
+            });
+        }
     </script>
 </body>
 </html>
