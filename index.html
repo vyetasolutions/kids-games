@@ -278,7 +278,7 @@
             justify-content: center;
             overflow: hidden;
             background: radial-gradient(ellipse 80% 60% at 50% 18%, #1e1b4b 0%, #0b1020 48%, #03040a 100%);
-            cursor: pointer;
+            
             transition: opacity 0.7s ease, visibility 0.7s ease;
         }
         .intro-screen.intro-hidden {
@@ -551,20 +551,21 @@
     </div>
 
     <script>
-        (function () {
-            var intro = document.getElementById('introScreen');
-            if (!intro) return;
-            function dismiss() {
-                intro.classList.add('intro-hidden');
-                setTimeout(function () { intro.remove(); }, 700);
-            }
-            var autoTimer = setTimeout(dismiss, 4200);
-            intro.addEventListener('click', function () {
-                clearTimeout(autoTimer);
-                dismiss();
-            });
-        })();
-    </script>
+    (function () {
+        var intro = document.getElementById('introScreen');
+        if (!intro) return;
+        
+        function dismiss() {
+            intro.classList.add('intro-hidden');
+            setTimeout(function () { intro.remove(); }, 700);
+        }
+
+        // Timer set to 7000ms (7 seconds)
+        // We removed the event listener entirely so it is no longer skippable
+        setTimeout(dismiss, 7000); 
+    })();
+</script>
+
 
     <div class="container">
         <div class="main-stage">
