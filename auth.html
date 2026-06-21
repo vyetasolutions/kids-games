@@ -130,16 +130,16 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
     <script>
-        // Connect to your specific database vault (Public Safe Key)
+        // 1. Initialize Supabase safely
         const supabaseUrl = 'https://uccdevvfexfpxnnwtpxa.supabase.co';
-        const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_'; 
-      const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        const supabaseKey = 'YOUR_ANON_PUBLIC_KEY'; 
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
+        // 2. State management
         let isLoginMode = true;
 
-        function toggleMode() {
+        window.toggleMode = function() {
             const title = document.querySelector('h2');
             const subtitle = document.querySelector('p');
             const btn = document.querySelector('.primary-btn');
@@ -158,10 +158,9 @@
                 btn.innerText = "Register";
                 toggleText.innerHTML = 'Already have an account? <span onclick="toggleMode()">Sign in</span>';
             }
-        }
+        };
 
-        // The actual connection to Supabase Auth
-        async function processAuth() {
+        window.processAuth = async function() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
 
@@ -171,32 +170,21 @@
             }
 
             if (isLoginMode) {
-                // Try to log them in
                 const { data, error } = await supabase.auth.signInWithPassword({
                     email: email,
                     password: password,
                 });
-
-                if (error) {
-                    alert("Login failed: " + error.message);
-                } else {
-                    alert("Success! Welcome back to the Arena.");
-                    // Next phase: we will redirect them to the game here
-                }
+                if (error) alert("Login failed: " + error.message);
+                else alert("Success! Welcome back to the Arena.");
             } else {
-                // Try to create a new account
                 const { data, error } = await supabase.auth.signUp({
                     email: email,
                     password: password,
                 });
-
-                if (error) {
-                    alert("Registration failed: " + error.message);
-                } else {
-                    alert("Account created! Check your email for the verification link.");
-                }
+                if (error) alert("Registration failed: " + error.message);
+                else alert("Account created! Check your email for the verification link.");
             }
-        }
+        };
     </script>
 </body>
 </html>
