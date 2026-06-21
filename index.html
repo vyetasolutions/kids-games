@@ -3,124 +3,253 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vyeta Crash Game Test</title>
+    <title>Sleek Premium Flight Arena</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <style>
         body {
-            background-color: #0b0f19;
+            background-color: #080b11;
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
         }
-        .game-card {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 24px;
-            padding: 40px;
-            width: 360px;
-            text-align: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        .container {
+            display: flex;
+            gap: 24px;
+            max-width: 900px;
+            width: 100%;
+            padding: 20px;
         }
-        .status {
+        .main-stage {
+            flex: 2;
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 28px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            height: 420px;
+            position: relative;
+        }
+        .header-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
             font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 2px;
             color: #64748b;
-            margin-bottom: 10px;
+        }
+        .balance-pill {
+            background: rgba(34, 197, 94, 0.1);
+            color: #4ade80;
+            padding: 6px 16px;
+            border-radius: 100px;
+            font-weight: 600;
         }
         .multiplier {
-            font-size: 5rem;
+            font-size: 5.5rem;
             font-weight: 800;
-            margin: 20px 0;
+            letter-spacing: -2px;
             font-variant-numeric: tabular-nums;
-            transition: color 0.1s ease;
         }
-        .live { color: #22c55e; }
-        .crashed { color: #ef4444; }
-        .waiting { color: #eab308; }
-        
-        .log-box {
-            margin-top: 20px;
+        .state-live { color: #22c55e; }
+        .state-crash { color: #ef4444; }
+        .state-wait { color: #eab308; }
+
+        .controls {
+            width: 100%;
+            display: flex;
+            gap: 12px;
+        }
+        input {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 16px;
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        button {
+            flex: 2;
+            border: none;
+            border-radius: 16px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-bet { background: #eab308; color: #000; }
+        .btn-cash { background: #22c55e; color: #fff; }
+        .btn-disabled { background: #1e293b; color: #64748b; cursor: not-allowed; }
+
+        .side-panel {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 28px;
+            padding: 24px;
+            height: 436px;
+            display: flex;
+            flex-direction: column;
+        }
+        .ledger-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #64748b;
+            margin-bottom: 12px;
+        }
+        .ledger-content {
             font-size: 0.85rem;
             color: #94a3b8;
-            background: rgba(0,0,0,0.2);
-            padding: 12px;
-            border-radius: 12px;
-            max-height: 80px;
             overflow-y: auto;
-            text-align: left;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
     </style>
 </head>
 <body>
 
-    <div class="game-card">
-        <div id="game-status" class="status">Connecting to Engine...</div>
-        <div id="multiplier-display" class="multiplier waiting">1.00x</div>
-        <div id="event-log" class="log-box">System initialized...</div>
+    <div class="container">
+        <div class="main-stage">
+            <div class="header-panel">
+                <div id="status-text">BETTING OPEN</div>
+                <div class="balance-pill">Balance: $<span id="balance-display">1000.00</span></div>
+            </div>
+
+            <div id="multiplier-display" class="state-wait">1.00x</div>
+
+            <div class="controls">
+                <input type="number" id="bet-input" value="10" min="1">
+                <button id="action-btn" class="btn-bet">PLACE BET</button>
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <div class="ledger-title">Live Arena Updates</div>
+            <div id="ledger-content" class="ledger-content"></div>
+        </div>
     </div>
 
     <script>
-        // 1. CONNECT TO YOUR LIVE RENDER SERVER
-        // REPLACE THIS URL WITH YOUR ACTUAL RENDER LIVE URL:
+        // CHANGE THIS TO YOUR EXACT LIVE RENDER SERVER URL
         const SERVER_URL = "https://kids-games-o79b.onrender.com"; 
-        
         const socket = io(SERVER_URL);
-        
-        const statusDisplay = document.getElementById('game-status');
-        const multiplierDisplay = document.getElementById('multiplier-display');
-        const eventLog = document.getElementById('event-log');
 
-        function logEvent(text) {
-            const p = document.createElement('p');
-            p.style.margin = "4px 0";
-            p.innerText = text;
-            eventLog.appendChild(p);
-            eventLog.scrollTop = eventLog.scrollHeight;
+        let currentBalance = 1000.00;
+        let hasBetInRound = false;
+        let isInFlight = false;
+
+        const statusText = document.getElementById('status-text');
+        const balanceDisplay = document.getElementById('balance-display');
+        const multiplierDisplay = document.getElementById('multiplier-display');
+        const actionBtn = document.getElementById('action-btn');
+        const betInput = document.getElementById('bet-input');
+        const ledgerContent = document.getElementById('ledger-content');
+
+        function addLog(msg) {
+            const div = document.createElement('div');
+            div.innerText = msg;
+            ledgerContent.prepend(div);
         }
 
-        // 2. LISTEN FOR LIVE SERVER EVENTS
+        // --- INCOMING WEBSOCKET MESSAGES ---
         
-        // When connection establishes successfully
-        socket.on('connect', () => {
-            statusDisplay.innerText = "Connected to Server";
-            logEvent("Established live pipeline to cloud server.");
+        socket.on('initial_state', (data) => {
+            currentBalance = data.balance;
+            balanceDisplay.innerText = currentBalance.toFixed(2);
         });
 
-        // When a new round starts
-        socket.on('game_started', (data) => {
-            statusDisplay.innerText = "In Flight";
-            multiplierDisplay.className = "multiplier live";
-            logEvent("✈️ A new plane has departed!");
+        socket.on('betting_phase_started', () => {
+            isInFlight = false;
+            hasBetInRound = false;
+            statusText.innerText = "NEXT ROUND STARTING...";
+            multiplierDisplay.className = "multiplier state-wait";
+            multiplierDisplay.innerText = "1.00x";
+            
+            actionBtn.className = "btn-bet";
+            actionBtn.innerText = "PLACE BET";
+            betInput.disabled = false;
         });
 
-        // Every 100 milliseconds, read the live stream value
+        socket.on('game_started', () => {
+            isInFlight = true;
+            statusText.innerText = "IN FLIGHT";
+            multiplierDisplay.className = "multiplier state-live";
+
+            if (hasBetInRound) {
+                actionBtn.className = "btn-cash";
+                actionBtn.innerText = "CASH OUT";
+            } else {
+                actionBtn.className = "btn-disabled";
+                actionBtn.innerText = "IN PROGRESS";
+            }
+        });
+
         socket.on('multiplier_tick', (data) => {
             multiplierDisplay.innerText = data.multiplier.toFixed(2) + "x";
+            if (hasBetInRound) {
+                const liveWinnings = (parseFloat(betInput.value) * data.multiplier).toFixed(2);
+                actionBtn.innerText = `CASH OUT ($${liveWinnings})`;
+            }
         });
 
-        // When the server calculates the crash point
         socket.on('game_crashed', (data) => {
-            statusDisplay.innerText = "Crashed";
-            multiplierDisplay.className = "multiplier crashed";
+            isInFlight = false;
+            statusText.innerText = "FLEW AWAY";
+            multiplierDisplay.className = "multiplier state-crash";
             multiplierDisplay.innerText = data.crashedAt.toFixed(2) + "x";
-            logEvent(`💥 Crashed spectacularly at ${data.crashedAt}x`);
+            
+            actionBtn.className = "btn-disabled";
+            actionBtn.innerText = "CRASHED";
+            betInput.disabled = false;
         });
 
-        // Catch up on current state if joining mid-flight
-        socket.on('initial_state', (data) => {
-            if(data.isGameRunning) {
-                statusDisplay.innerText = "In Flight";
-                multiplierDisplay.className = "multiplier live";
-            } else {
-                statusDisplay.innerText = "Waiting for Next Round";
-                multiplierDisplay.className = "multiplier waiting";
+        socket.on('bet_confirmed', (data) => {
+            hasBetInRound = true;
+            currentBalance = data.balance;
+            balanceDisplay.innerText = currentBalance.toFixed(2);
+            actionBtn.className = "btn-disabled";
+            actionBtn.innerText = "BET LOCKED";
+            betInput.disabled = true;
+        });
+
+        socket.on('cash_out_success', (data) => {
+            hasBetInRound = false;
+            currentBalance = data.balance;
+            balanceDisplay.innerText = currentBalance.toFixed(2);
+            actionBtn.className = "btn-disabled";
+            actionBtn.innerText = "CASHED OUT!";
+            addLog(`You successfully won $${data.winnings}!`);
+        });
+
+        socket.on('ledger_update', (data) => {
+            addLog(data.message);
+        });
+
+        socket.on('error_message', (data) => {
+            alert(data.message);
+        });
+
+        // --- INTERACTIVE ACTIONS ---
+        actionBtn.addEventListener('click', () => {
+            if (!isInFlight && !hasBetInRound) {
+                // Place a bet
+                const amount = betInput.value;
+                socket.emit('place_bet', { amount });
+            } else if (isInFlight && hasBetInRound) {
+                // Cash out
+                socket.emit('cash_out');
             }
         });
     </script>
