@@ -135,7 +135,7 @@
         // Connect to your specific database vault (Public Safe Key)
         const supabaseUrl = 'https://uccdevvfexfpxnnwtpxa.supabase.co';
         const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_'; 
-        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+      const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
         let isLoginMode = true;
 
