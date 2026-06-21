@@ -333,6 +333,31 @@
                         }
                     });
 
+                    // Surface connection problems instead of staying silently stuck
+                    // on "PLEASE WAIT..." — this is what was making the page look static.
+                    socket.on('connect_error', (err) => {
+                        console.error("Socket connect_error:", err.message);
+                        statusText.innerText = "Connection failed: " + err.message;
+                        statusText.style.color = "#ef4444";
+                        actionBtn.className = "btn-disabled";
+                        actionBtn.innerText = "RECONNECTING...";
+                    });
+
+                    socket.on('disconnect', (reason) => {
+                        console.warn("Socket disconnected:", reason);
+                        statusText.innerText = "Disconnected: " + reason;
+                        statusText.style.color = "#ef4444";
+                        actionBtn.className = "btn-disabled";
+                        actionBtn.innerText = "RECONNECTING...";
+                    });
+
+                    // Sync the real balance from the server instead of the
+                    // hardcoded 1000.00 placeholder.
+                    socket.on('initial_state', (data) => {
+                        currentBalance = data.balance;
+                        balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    });
+
                     // Initialize the game connections now that we are verified
                     initializeGameListeners();
                 } else {
