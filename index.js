@@ -33,20 +33,19 @@ let playerBalances = {};
 let activeBets = {}; 
 
 // --- BOUNCER MIDDLEWARE ---
-io.use(async (socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) return next(new Error("Authentication error: No session found."));
-
-    try {
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (error || !user) throw new Error("Invalid token");
-        
-        socket.user = user; // Attach user object to socket
-        next();
-    } catch (e) {
-        next(new Error("Authentication failed: Access denied."));
-    }
-});
+// Disabled for now: free/open access, no login required.
+// io.use(async (socket, next) => {
+//     const token = socket.handshake.auth.token;
+//     if (!token) return next(new Error("Authentication error: No session found."));
+//     try {
+//         const { data: { user }, error } = await supabase.auth.getUser(token);
+//         if (error || !user) throw new Error("Invalid token");
+//         socket.user = user;
+//         next();
+//     } catch (e) {
+//         next(new Error("Authentication failed: Access denied."));
+//     }
+// });
 
 // --- GAME CORE FUNCTIONS ---
 function generateCrashPoint() {
@@ -88,8 +87,8 @@ function handleCrash() {
 
 // --- WEBSOCKET EVENT HANDLING ---
 io.on('connection', (socket) => {
-    const userId = socket.user.id;
-    console.log(`User connected: ${socket.user.email}`);
+    const userId = socket.id;
+    console.log(`User connected: ${userId}`);
 
     // Set default balance if player is new
     if (playerBalances[userId] === undefined) playerBalances[userId] = 1000.00;
