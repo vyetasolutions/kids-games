@@ -127,6 +127,44 @@
             font-variant-numeric: tabular-nums;
             text-shadow: 0 4px 24px rgba(0,0,0,0.6);
         }
+        /* 🏆 Center Screen Win Celebration */
+        .win-splash {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.5);
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.85), rgba(5, 150, 105, 0.95));
+            backdrop-filter: blur(12px);
+            padding: 24px 48px;
+            border-radius: 32px;
+            border: 2px solid rgba(110, 231, 183, 0.5);
+            box-shadow: 0 20px 60px rgba(16, 185, 129, 0.4);
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 50;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .win-splash.show {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+            top: 40%; /* Creates a rising float effect */
+        }
+        .win-label {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #d1fae5;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 4px;
+        }
+        .win-amount {
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: -1px;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
         .controls {
             width: 100%;
             display: flex;
@@ -244,6 +282,12 @@
 
             <div class="canvas-container">
                 <div id="multiplier-display" class="live-multiplier-overlay" style="color: #cbd5e1;">1.00x</div>
+                
+                <div id="win-splash" class="win-splash">
+                    <div class="win-label">Cash Secured</div>
+                    <div id="win-splash-amount" class="win-amount">+ K0.00</div>
+                </div>
+
                 <canvas id="gameCanvas"></canvas>
             </div>
 
@@ -711,7 +755,12 @@
             initAudioEngine(); // Pre-trigger audio focus context window
         });
 
-        socket.on('cash_out_success', (data) => {
+       socket.on('cash_out_success', (data) => {
+            // 📱 Physical haptic feedback
+            if (navigator.vibrate) {
+                navigator.vibrate([40, 50, 40]);
+            }
+
             hasBetInRound = false;
             currentBalance = data.balance;
             balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -721,6 +770,19 @@
             playCashOutSound();
             triggerWinAnimation();
             addLog(`Awesome! You safely collected K${data.winnings.toFixed(2)}`, true);
+
+            // 🏆 TRIGGER CENTER SCREEN WIN SPLASH
+            const winSplash = document.getElementById('win-splash');
+            const winSplashAmount = document.getElementById('win-splash-amount');
+            
+            // Format the text and show the splash
+            winSplashAmount.innerText = `+ K${data.winnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            winSplash.classList.add('show');
+
+            // Hide the splash safely after 2.5 seconds
+            setTimeout(() => {
+                winSplash.classList.remove('show');
+            }, 2500);
         });
 
         socket.on('ledger_update', (data) => {
