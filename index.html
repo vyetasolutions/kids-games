@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vyeta Kwacha Balloon Adventures</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
             background: linear-gradient(135deg, #090d16, #111827);
@@ -264,9 +267,304 @@
             font-weight: 600;
             text-align: center;
         }
+
+        /* ============ INTRO / SPLASH SCREEN ============ */
+        .intro-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: radial-gradient(ellipse 80% 60% at 50% 18%, #1e1b4b 0%, #0b1020 48%, #03040a 100%);
+            cursor: pointer;
+            transition: opacity 0.7s ease, visibility 0.7s ease;
+        }
+        .intro-screen.intro-hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .intro-stars .intro-star {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: #fff;
+            border-radius: 50%;
+            opacity: 0.4;
+            animation: introStarTwinkle 2.8s ease-in-out infinite;
+        }
+        .intro-cloud {
+            position: absolute;
+            width: 240px;
+            height: 80px;
+            background: radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%);
+            border-radius: 50%;
+            filter: blur(6px);
+            will-change: transform;
+        }
+        .intro-cloud-1 { top: 16%; left: -20%; animation: introCloudDrift 16s linear infinite; }
+        .intro-cloud-2 { top: 64%; left: -30%; animation: introCloudDrift 21s linear infinite; animation-delay: 4s; }
+
+        .intro-content {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 24px;
+        }
+        .intro-eyebrow {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.7rem;
+            letter-spacing: 3px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 16px;
+            opacity: 0;
+            animation: introReveal 0.8s ease forwards;
+            animation-delay: 0.15s;
+        }
+        .balloon-wrap {
+            position: relative;
+            width: clamp(120px, 30vw, 180px);
+            margin-bottom: 4px;
+            opacity: 0;
+            animation: introBalloonRise 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+        .balloon-wrap svg {
+            width: 100%;
+            display: block;
+            animation: introBalloonBob 4.6s ease-in-out infinite;
+            animation-delay: 1.3s;
+            transform-origin: 50% 78%;
+        }
+        .balloon-glow {
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            width: 70%;
+            height: 26px;
+            transform: translateX(-50%);
+            background: radial-gradient(ellipse, rgba(251,191,36,0.35), transparent 70%);
+            filter: blur(8px);
+            border-radius: 50%;
+        }
+        .balloon-flame { animation: introFlameFlicker 0.55s ease-in-out infinite; transform-origin: 50% 100%; }
+
+        .intro-title {
+            margin: 16px 0 6px;
+            font-family: 'Sora', -apple-system, sans-serif;
+            line-height: 1.05;
+        }
+        .intro-title-line {
+            display: block;
+            opacity: 0;
+            transform: translateY(14px);
+            animation: introReveal 0.7s ease forwards;
+        }
+        .intro-title-line-1 {
+            font-size: clamp(0.95rem, 3vw, 1.25rem);
+            letter-spacing: 6px;
+            color: rgba(255,255,255,0.55);
+            font-weight: 700;
+            animation-delay: 1.5s;
+        }
+        .intro-title-line-2 {
+            font-size: clamp(2rem, 7vw, 3.3rem);
+            letter-spacing: 0.5px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fde68a, #fbbf24 45%, #34d399);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation-delay: 1.7s;
+        }
+        .intro-tagline {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.95rem;
+            color: rgba(255,255,255,0.5);
+            margin: 4px 0 26px;
+            opacity: 0;
+            animation: introReveal 0.7s ease forwards;
+            animation-delay: 1.95s;
+        }
+        .intro-boarding {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            animation: introReveal 0.6s ease forwards;
+            animation-delay: 2.2s;
+        }
+        .intro-dot { width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; animation: introDotPulse 1.2s ease-in-out infinite; }
+        .intro-dot:nth-child(2) { animation-delay: 0.15s; }
+        .intro-dot:nth-child(3) { animation-delay: 0.3s; }
+        .intro-boarding-text {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.4);
+        }
+
+        .intro-footer {
+            position: absolute;
+            bottom: 28px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.7rem;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.3);
+            font-weight: 600;
+            opacity: 0;
+            animation: introReveal 0.6s ease forwards;
+            animation-delay: 2.4s;
+        }
+
+        @keyframes introBalloonRise {
+            0% { opacity: 0; transform: translateY(120px) scale(0.85); }
+            70% { opacity: 1; transform: translateY(-8px) scale(1.02); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes introBalloonBob {
+            0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+            50% { transform: translateY(-12px) rotate(1.2deg); }
+        }
+        @keyframes introFlameFlicker {
+            0%, 100% { opacity: 0.85; transform: scaleY(1); }
+            50% { opacity: 1; transform: scaleY(1.18); }
+        }
+        @keyframes introStarTwinkle { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.9; } }
+        @keyframes introCloudDrift { from { transform: translateX(0); } to { transform: translateX(160vw); } }
+        @keyframes introReveal { to { opacity: 1; transform: translateY(0); } }
+        @keyframes introDotPulse { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.7); } 40% { opacity: 1; transform: scale(1); } }
+
+        @media (prefers-reduced-motion: reduce) {
+            .balloon-wrap, .intro-title-line, .intro-tagline, .intro-boarding, .intro-footer, .intro-eyebrow {
+                animation: none !important;
+                opacity: 1 !important;
+                transform: none !important;
+            }
+            .balloon-wrap svg, .balloon-flame, .intro-dot, .intro-cloud, .intro-star {
+                animation: none !important;
+            }
+        }
     </style>
 </head>
 <body>
+
+    <div id="introScreen" class="intro-screen" role="img" aria-label="Kwacha Balloon Arena is loading">
+        <div class="intro-stars">
+            <span class="intro-star" style="top:10%; left:14%;"></span>
+            <span class="intro-star" style="top:22%; left:78%; animation-delay:0.4s;"></span>
+            <span class="intro-star" style="top:8%; left:48%; animation-delay:0.8s;"></span>
+            <span class="intro-star" style="top:32%; left:30%; animation-delay:1.2s;"></span>
+            <span class="intro-star" style="top:15%; left:88%; animation-delay:1.6s;"></span>
+            <span class="intro-star" style="top:40%; left:8%; animation-delay:0.6s;"></span>
+            <span class="intro-star" style="top:6%; left:65%; animation-delay:1.4s;"></span>
+            <span class="intro-star" style="top:28%; left:58%; animation-delay:0.2s;"></span>
+        </div>
+        <div class="intro-cloud intro-cloud-1"></div>
+        <div class="intro-cloud intro-cloud-2"></div>
+
+        <div class="intro-content">
+            <div class="intro-eyebrow">Vyeta Digital Solutions Presents</div>
+
+            <div class="balloon-wrap">
+                <div class="balloon-glow"></div>
+                <svg viewBox="0 0 220 320" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="introGold" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#fde68a"/>
+                            <stop offset="100%" stop-color="#f59e0b"/>
+                        </linearGradient>
+                        <linearGradient id="introGreen" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#6ee7b7"/>
+                            <stop offset="100%" stop-color="#10b981"/>
+                        </linearGradient>
+                        <radialGradient id="introSheen" cx="35%" cy="18%" r="60%">
+                            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+                            <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+                        </radialGradient>
+                        <radialGradient id="introFlameGrad" cx="50%" cy="30%" r="60%">
+                            <stop offset="0%" stop-color="#fff7d6"/>
+                            <stop offset="55%" stop-color="#fbbf24"/>
+                            <stop offset="100%" stop-color="#ea580c" stop-opacity="0"/>
+                        </radialGradient>
+                        <clipPath id="introBalloonClip">
+                            <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z"/>
+                        </clipPath>
+                    </defs>
+
+                    <g clip-path="url(#introBalloonClip)">
+                        <rect x="0"   y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="22"  y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="44"  y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="66"  y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="88"  y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="110" y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="132" y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="154" y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="176" y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="198" y="0" width="22" height="240" fill="url(#introGreen)"/>
+                    </g>
+                    <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z" fill="url(#introSheen)"/>
+                    <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z" fill="none" stroke="rgba(0,0,0,0.25)" stroke-width="2"/>
+
+                    <circle cx="110" cy="120" r="26" fill="#0b1220" opacity="0.85"/>
+                    <text x="110" y="131" font-size="30" font-weight="900" fill="#fbbf24" text-anchor="middle" font-family="'Sora', sans-serif">K</text>
+
+                    <path d="M85 235 L135 235 L125 248 L95 248 Z" fill="#92400e"/>
+                    <ellipse class="balloon-flame" cx="110" cy="252" rx="10" ry="16" fill="url(#introFlameGrad)"/>
+
+                    <line x1="95" y1="248" x2="78" y2="278" stroke="#a8a29e" stroke-width="2"/>
+                    <line x1="125" y1="248" x2="142" y2="278" stroke="#a8a29e" stroke-width="2"/>
+                    <line x1="105" y1="248" x2="92" y2="278" stroke="#a8a29e" stroke-width="2"/>
+                    <line x1="115" y1="248" x2="128" y2="278" stroke="#a8a29e" stroke-width="2"/>
+
+                    <rect x="78" y="278" width="64" height="30" rx="6" fill="#7c5a3a"/>
+                    <line x1="78" y1="288" x2="142" y2="288" stroke="#5c4128" stroke-width="1.5" opacity="0.7"/>
+                    <line x1="78" y1="298" x2="142" y2="298" stroke="#5c4128" stroke-width="1.5" opacity="0.7"/>
+                </svg>
+            </div>
+
+            <h1 class="intro-title">
+                <span class="intro-title-line intro-title-line-1">KWACHA</span>
+                <span class="intro-title-line intro-title-line-2">BALLOON ARENA</span>
+            </h1>
+            <p class="intro-tagline">Fortunes rise. Know when to jump.</p>
+
+            <div class="intro-boarding">
+                <span class="intro-dot"></span><span class="intro-dot"></span><span class="intro-dot"></span>
+                <span class="intro-boarding-text">Boarding flight deck</span>
+            </div>
+        </div>
+
+        <div class="intro-footer">Powered by Vyeta</div>
+    </div>
+
+    <script>
+        (function () {
+            var intro = document.getElementById('introScreen');
+            if (!intro) return;
+            function dismiss() {
+                intro.classList.add('intro-hidden');
+                setTimeout(function () { intro.remove(); }, 700);
+            }
+            var autoTimer = setTimeout(dismiss, 4200);
+            intro.addEventListener('click', function () {
+                clearTimeout(autoTimer);
+                dismiss();
+            });
+        })();
+    </script>
 
     <div class="container">
         <div class="main-stage">
@@ -788,11 +1086,9 @@
             });
 
             socket.on('ledger_update', (data) => {
-                // Map raw server lines into friendly local currency expressions
-                let userMsg = data.message.replace("Player placed a bet of", "A player bought a ticket for K");
-                userMsg = userMsg.replace("Player cashed out", "A player jumped to safety");
-                userMsg = userMsg.replace("wins", "and collected K");
-                addLog(userMsg);
+                // Server now sends a fully-formatted, ready-to-display message.
+                // type: 'win' gets the green highlight, everything else is neutral.
+                addLog(data.message, data.type === 'win');
             });
 
             socket.on('error_message', (data) => { alert(data.message); });
