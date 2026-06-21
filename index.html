@@ -309,35 +309,10 @@
     <div class="vyeta-footer">Powered by Vyeta Digital Solutions</div>
 
     <script>
-        // 1. Global Socket Variable
+        // Socket connection is set up at the bottom of this script, after every
+        // variable and element reference below has actually been declared.
         let socket;
-        const SERVER_URL = "https://kids-games-o79b.onrender.com"; 
-
-        // 2. Connect straight away — no login required for now.
-        socket = io(SERVER_URL);
-
-        socket.on('connect_error', (err) => {
-            console.error("Socket connect_error:", err.message);
-            statusText.innerText = "Connection failed: " + err.message;
-            statusText.style.color = "#ef4444";
-            actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "RECONNECTING...";
-        });
-
-        socket.on('disconnect', (reason) => {
-            console.warn("Socket disconnected:", reason);
-            statusText.innerText = "Disconnected: " + reason;
-            statusText.style.color = "#ef4444";
-            actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "RECONNECTING...";
-        });
-
-        socket.on('initial_state', (data) => {
-            currentBalance = data.balance;
-            balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        });
-
-        initializeGameListeners();
+        const SERVER_URL = "https://kids-games-o79b.onrender.com";
 
         // --- GLOBAL GAME STATE ---
         let currentBalance = 1000.00;
@@ -831,6 +806,35 @@
                 }
             });
         }
+
+        // --- CONNECT TO THE GAME SERVER ---
+        // Placed here, at the bottom, so every const/let/element reference used
+        // inside initializeGameListeners() and the socket handlers below has
+        // already been declared by the time any of this code actually runs.
+        socket = io(SERVER_URL);
+
+        socket.on('connect_error', (err) => {
+            console.error("Socket connect_error:", err.message);
+            statusText.innerText = "Connection failed: " + err.message;
+            statusText.style.color = "#ef4444";
+            actionBtn.className = "btn-disabled";
+            actionBtn.innerText = "RECONNECTING...";
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.warn("Socket disconnected:", reason);
+            statusText.innerText = "Disconnected: " + reason;
+            statusText.style.color = "#ef4444";
+            actionBtn.className = "btn-disabled";
+            actionBtn.innerText = "RECONNECTING...";
+        });
+
+        socket.on('initial_state', (data) => {
+            currentBalance = data.balance;
+            balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        });
+
+        initializeGameListeners();
     </script>
 </body>
 </html>
