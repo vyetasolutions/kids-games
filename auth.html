@@ -122,15 +122,21 @@
             <input type="password" id="password" placeholder="••••••••">
         </div>
 
-        <button class="primary-btn" onclick="signIn()">Sign In</button>
+        <button class="primary-btn" onclick="processAuth()">Sign In</button>
         
         <div class="toggle-text">
             New here? <span onclick="toggleMode()">Create an account</span>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <script>
-        // We will add the Supabase connection code here in Phase 2!
+        // Connect to your specific database vault (Public Safe Key)
+        const supabaseUrl = 'https://uccdevvfexfpxnnwtpxa.supabase.co';
+        const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_'; 
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
         let isLoginMode = true;
 
         function toggleMode() {
@@ -154,8 +160,42 @@
             }
         }
 
-        function signIn() {
-            alert("Button clicked! We will connect this to Supabase next.");
+        // The actual connection to Supabase Auth
+        async function processAuth() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                alert("Please enter both an email and a password.");
+                return;
+            }
+
+            if (isLoginMode) {
+                // Try to log them in
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password,
+                });
+
+                if (error) {
+                    alert("Login failed: " + error.message);
+                } else {
+                    alert("Success! Welcome back to the Arena.");
+                    // Next phase: we will redirect them to the game here
+                }
+            } else {
+                // Try to create a new account
+                const { data, error } = await supabase.auth.signUp({
+                    email: email,
+                    password: password,
+                });
+
+                if (error) {
+                    alert("Registration failed: " + error.message);
+                } else {
+                    alert("Account created! Check your email for the verification link.");
+                }
+            }
         }
     </script>
 </body>
