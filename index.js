@@ -20,11 +20,27 @@ let playerBalances = {};
 let activeBets = {}; // Stores { socketId: betAmount }
 
 function generateCrashPoint() {
-  const rand = Math.random();
-  if (rand < 0.03) return 1.00; // 3% House Edge
-  return parseFloat((1.01 + (0.01 / (1 - Math.random()))).toFixed(2));
-}
+  const RNG = Math.random() * 100; // Generate a percentage roll from 0 to 100
 
+  // Tier 1: Instant / Very Early Burst (10% chance)
+  if (RNG <= 10) {
+    return parseFloat((1.00 + (Math.random() * 0.2)).toFixed(2)); 
+  }
+  
+  // Tier 2: Standard Mid-Tier Run (50% chance)
+  if (RNG > 10 && RNG <= 60) {
+    return parseFloat((1.21 + (Math.random() * 2.29)).toFixed(2)); 
+  }
+  
+  // Tier 3: High Altitude Ascent (30% chance)
+  if (RNG > 60 && RNG <= 90) {
+    return parseFloat((3.51 + (Math.random() * 6.49)).toFixed(2)); 
+  }
+  
+  // Tier 4: Legend Mode / Outer Space (10% chance)
+  // Generates a thrilling multiplier anywhere between 10x and 100x
+  return parseFloat((10.01 + (Math.random() * 89.99)).toFixed(2));
+}
 function startBettingPhase() {
   bettingPhase = true;
   isGameRunning = false;
