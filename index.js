@@ -11,153 +11,126 @@ const PORT = process.env.PORT || 3000;
 
 // --- SUPABASE DATABASE CONNECTION ---
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-
+const supabaseKey = process.env.SUPABASE_KEY; // Use your Service Role Key here
 let supabase;
+
 if (supabaseUrl && supabaseKey) {
     supabase = createClient(supabaseUrl, supabaseKey);
     console.log("✅ Database link established successfully.");
 } else {
-    console.log("⚠️ Database keys missing. Running in local memory mode.");
+    console.log("⚠️ Database keys missing. Running in memory-only mode.");
 }
 
-// --- GAME STATE & USER LEDGER ---
+// --- GAME STATE ---
 let gameLoopInterval;
 let currentMultiplier = 1.00;
 let isGameRunning = false;
 let crashPoint = 1.00;
-let bettingPhase = true; // Tracks if players can bet before takeoff
+let bettingPhase = true;
 
-// Virtual database for testing (resets if server sleeps)
+// Persistent storage keyed by User ID
 let playerBalances = {}; 
-let activeBets = {}; // Stores { socketId: betAmount }
+let activeBets = {}; 
 
+// --- BOUNCER MIDDLEWARE ---
+io.use(async (socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) return next(new Error("Authentication error: No session found."));
+
+    try {
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+        if (error || !user) throw new Error("Invalid token");
+        
+        socket.user = user; // Attach user object to socket
+        next();
+    } catch (e) {
+        next(new Error("Authentication failed: Access denied."));
+    }
+});
+
+// --- GAME CORE FUNCTIONS ---
 function generateCrashPoint() {
-  const RNG = Math.random() * 100; // Generate a percentage roll from 0 to 100
-
-  // Tier 1: Instant / Very Early Burst (10% chance)
-  if (RNG <= 10) {
-    return parseFloat((1.00 + (Math.random() * 0.2)).toFixed(2)); 
-  }
-  
-  // Tier 2: Standard Mid-Tier Run (50% chance)
-  if (RNG > 10 && RNG <= 60) {
-    return parseFloat((1.21 + (Math.random() * 2.29)).toFixed(2)); 
-  }
-  
-  // Tier 3: High Altitude Ascent (30% chance)
-  if (RNG > 60 && RNG <= 90) {
-    return parseFloat((3.51 + (Math.random() * 6.49)).toFixed(2)); 
-  }
-  
-  // Tier 4: Legend Mode / Outer Space (10% chance)
-  // Generates a thrilling multiplier anywhere between 10x and 100x
-  return parseFloat((10.01 + (Math.random() * 89.99)).toFixed(2));
+    const RNG = Math.random() * 100;
+    if (RNG <= 10) return parseFloat((1.00 + (Math.random() * 0.2)).toFixed(2));
+    if (RNG <= 60) return parseFloat((1.21 + (Math.random() * 2.29)).toFixed(2));
+    if (RNG <= 90) return parseFloat((3.51 + (Math.random() * 6.49)).toFixed(2));
+    return parseFloat((10.01 + (Math.random() * 89.99)).toFixed(2));
 }
 
 function startBettingPhase() {
-  bettingPhase = true;
-  isGameRunning = false;
-  currentMultiplier = 1.00;
-  activeBets = {}; // Clear old bets
-  
-  io.emit('betting_phase_started', { duration: 6000 });
-  
-  setTimeout(() => {
-    takeOff();
-  }, 6000);
+    bettingPhase = true;
+    isGameRunning = false;
+    currentMultiplier = 1.00;
+    activeBets = {};
+    io.emit('betting_phase_started', { duration: 6000 });
+    setTimeout(takeOff, 6000);
 }
 
 function takeOff() {
-  bettingPhase = false;
-  isGameRunning = true;
-  crashPoint = generateCrashPoint();
-  
-  io.emit('game_started', { message: "The plane has departed!" });
-
-  gameLoopInterval = setInterval(() => {
-    let increment = 0.01 * Math.pow(currentMultiplier, 0.4);
-    currentMultiplier = parseFloat((currentMultiplier + increment).toFixed(2));
-
-    if (currentMultiplier >= crashPoint) {
-      handleCrash();
-    } else {
-      io.emit('multiplier_tick', { multiplier: currentMultiplier });
-    }
-  }, 100);
+    bettingPhase = false;
+    isGameRunning = true;
+    crashPoint = generateCrashPoint();
+    io.emit('game_started');
+    gameLoopInterval = setInterval(() => {
+        let increment = 0.01 * Math.pow(currentMultiplier, 0.4);
+        currentMultiplier = parseFloat((currentMultiplier + increment).toFixed(2));
+        if (currentMultiplier >= crashPoint) handleCrash();
+        else io.emit('multiplier_tick', { multiplier: currentMultiplier });
+    }, 100);
 }
 
 function handleCrash() {
-  clearInterval(gameLoopInterval);
-  isGameRunning = false;
-  
-  io.emit('game_crashed', { crashedAt: crashPoint });
-
-  // Start the next betting phase automatically
-  setTimeout(() => {
-    startBettingPhase();
-  }, 4000);
+    clearInterval(gameLoopInterval);
+    isGameRunning = false;
+    io.emit('game_crashed', { crashedAt: crashPoint });
+    setTimeout(startBettingPhase, 4000);
 }
 
 // --- WEBSOCKET EVENT HANDLING ---
 io.on('connection', (socket) => {
-  // Give every new connection a starting balance of $1,000 play money
-  playerBalances[socket.id] = 1000.00;
+    const userId = socket.user.id;
+    console.log(`User connected: ${socket.user.email}`);
+
+    // Set default balance if player is new
+    if (playerBalances[userId] === undefined) playerBalances[userId] = 1000.00;
   
-  socket.emit('initial_state', {
-    isGameRunning,
-    bettingPhase,
-    currentMultiplier,
-    balance: playerBalances[socket.id]
-  });
-
-  // Handle a player placing a bet
-  socket.on('place_bet', (data) => {
-    const betAmount = parseFloat(data.amount);
-    
-    if (!bettingPhase) {
-      return socket.emit('error_message', { message: "Flight already departed! Wait for next round." });
-    }
-    if (activeBets[socket.id]) {
-      return socket.emit('error_message', { message: "Bet already placed for this round." });
-    }
-    if (playerBalances[socket.id] < betAmount || betAmount <= 0) {
-      return socket.emit('error_message', { message: "Insufficient balance or invalid bet." });
-    }
-
-    // Deduct stake and register bet securely on the server
-    playerBalances[socket.id] -= betAmount;
-    activeBets[socket.id] = betAmount;
-
-    socket.emit('bet_confirmed', { balance: playerBalances[socket.id], betAmount });
-    io.emit('ledger_update', { message: `Player placed a $${betAmount} bet.` });
-  });
-
-  // Handle a player cashing out mid-flight
-  socket.on('cash_out', () => {
-    if (!isGameRunning || !activeBets[socket.id]) return;
-
-    const stake = activeBets[socket.id];
-    const winnings = parseFloat((stake * currentMultiplier).toFixed(2));
-    
-    // Credit player balance and remove active bet
-    playerBalances[socket.id] += winnings;
-    delete activeBets[socket.id];
-
-    socket.emit('cash_out_success', { 
-      balance: playerBalances[socket.id], 
-      winnings, 
-      multiplier: currentMultiplier 
+    socket.emit('initial_state', {
+        isGameRunning,
+        bettingPhase,
+        currentMultiplier,
+        balance: playerBalances[userId]
     });
-    
-    io.emit('ledger_update', { message: `Player cashed out $${winnings} at ${currentMultiplier}x!` });
-  });
 
-  socket.on('disconnect', () => {
-    delete playerBalances[socket.id];
-    delete activeBets[socket.id];
-  });
+    socket.on('place_bet', (data) => {
+        const betAmount = parseFloat(data.amount);
+        if (!bettingPhase) return socket.emit('error_message', { message: "Flight departed!" });
+        if (activeBets[userId]) return socket.emit('error_message', { message: "Bet already placed." });
+        if (playerBalances[userId] < betAmount || betAmount <= 0) return socket.emit('error_message', { message: "Invalid bet." });
+
+        playerBalances[userId] -= betAmount;
+        activeBets[userId] = betAmount;
+        socket.emit('bet_confirmed', { balance: playerBalances[userId], betAmount });
+        io.emit('ledger_update', { message: `A player placed a K${betAmount} bet.` });
+    });
+
+    socket.on('cash_out', () => {
+        if (!isGameRunning || !activeBets[userId]) return;
+        const stake = activeBets[userId];
+        const winnings = parseFloat((stake * currentMultiplier).toFixed(2));
+        
+        playerBalances[userId] += winnings;
+        delete activeBets[userId];
+
+        socket.emit('cash_out_success', { balance: playerBalances[userId], winnings });
+    });
+
+    socket.on('disconnect', () => {
+        delete activeBets[userId];
+    });
 });
 
-app.get('/', (req, res) => { res.send('Game core with ledger running.'); });
-server.listen(PORT, () => { startBettingPhase(); });
+app.get('/', (req, res) => res.send('Secure Game Core Active.'));
+server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+    startBettingPhase();
+});
