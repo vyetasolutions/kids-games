@@ -93,6 +93,11 @@
             background-color: #0062cc;
         }
 
+        .primary-btn:disabled {
+            background-color: #3a3a40;
+            cursor: not-allowed;
+        }
+
         .toggle-text {
             margin-top: 24px;
             font-size: 14px;
@@ -104,6 +109,13 @@
             cursor: pointer;
             font-weight: 600;
         }
+
+        .status-msg {
+            min-height: 18px;
+            font-size: 13px;
+            margin-top: 14px;
+            color: #ff6b6b;
+        }
     </style>
 </head>
 <body>
@@ -111,19 +123,21 @@
     <div class="auth-container" id="login-box">
         <h2>Welcome Back</h2>
         <p>Sign in to access the flight deck.</p>
-        
+
         <div class="input-group">
             <label for="email">Email Address</label>
             <input type="email" id="email" placeholder="pilot@example.com">
         </div>
-        
+
         <div class="input-group">
             <label for="password">Password</label>
             <input type="password" id="password" placeholder="••••••••">
         </div>
 
-        <button class="primary-btn" onclick="processAuth()">Sign In</button>
-        
+        <button class="primary-btn" id="auth-btn" onclick="processAuth()">Sign In</button>
+
+        <div class="status-msg" id="status-msg"></div>
+
         <div class="toggle-text">
             New here? <span onclick="toggleMode()">Create an account</span>
         </div>
@@ -132,9 +146,15 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         // 1. Initialize Supabase safely
+        // NOTE: the CDN script attaches its library to the global `supabase` object
+        // (with a lowercase s) and exposes `supabase.createClient`. We must NOT name
+        // our own client variable "supabase" too, or we shadow that global and get
+        // "Cannot access 'supabase' before initialization" the instant this script runs —
+        // which silently breaks every function below it (including toggleMode and
+        // processAuth), making the buttons look unresponsive.
         const supabaseUrl = 'https://uccdevvfexfpxnnwtpxa.supabase.co';
-        const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_'; 
-        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_';
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
         // 2. State management
         let isLoginMode = true;
@@ -142,10 +162,12 @@
         window.toggleMode = function() {
             const title = document.querySelector('h2');
             const subtitle = document.querySelector('p');
-            const btn = document.querySelector('.primary-btn');
+            const btn = document.getElementById('auth-btn');
             const toggleText = document.querySelector('.toggle-text');
+            const statusMsg = document.getElementById('status-msg');
 
             isLoginMode = !isLoginMode;
+            statusMsg.innerText = '';
 
             if (isLoginMode) {
                 title.innerText = "Welcome Back";
@@ -161,28 +183,52 @@
         };
 
         window.processAuth = async function() {
-            const email = document.getElementById('email').value;
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
+            const btn = document.getElementById('auth-btn');
+            const statusMsg = document.getElementById('status-msg');
+
+            statusMsg.style.color = '#ff6b6b';
+            statusMsg.innerText = '';
 
             if (!email || !password) {
-                alert("Please enter both an email and a password.");
+                statusMsg.innerText = "Please enter both an email and a password.";
                 return;
             }
 
-            if (isLoginMode) {
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email: email,
-                    password: password,
-                });
-                if (error) alert("Login failed: " + error.message);
-                else alert("Success! Welcome back to the Arena.");
-            } else {
-                const { data, error } = await supabase.auth.signUp({
-                    email: email,
-                    password: password,
-                });
-                if (error) alert("Registration failed: " + error.message);
-                else alert("Account created! Check your email for the verification link.");
+            btn.disabled = true;
+            const originalLabel = btn.innerText;
+            btn.innerText = "Please wait...";
+
+            try {
+                if (isLoginMode) {
+                    const { data, error } = await supabaseClient.auth.signInWithPassword({
+                        email: email,
+                        password: password,
+                    });
+                    if (error) {
+                        statusMsg.innerText = "Login failed: " + error.message;
+                    } else {
+                        statusMsg.style.color = '#4cd964';
+                        statusMsg.innerText = "Success! Welcome back to the Arena.";
+                    }
+                } else {
+                    const { data, error } = await supabaseClient.auth.signUp({
+                        email: email,
+                        password: password,
+                    });
+                    if (error) {
+                        statusMsg.innerText = "Registration failed: " + error.message;
+                    } else {
+                        statusMsg.style.color = '#4cd964';
+                        statusMsg.innerText = "Account created! Check your email for the verification link.";
+                    }
+                }
+            } catch (err) {
+                statusMsg.innerText = "Unexpected error: " + err.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalLabel;
             }
         };
     </script>
