@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vyeta Balloon Adventures</title>
+    <title>Vyeta Kwacha Balloon Adventures</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <style>
         body {
-            background: linear-gradient(135deg, #0f172a, #1e293b);
+            background: linear-gradient(135deg, #090d16, #111827);
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
@@ -17,7 +17,7 @@
             min-height: 100vh;
             margin: 0;
             overflow-x: hidden;
-            overflow-y: auto; /* Fixed mobile scrolling */
+            overflow-y: auto;
             padding: 40px 20px;
             box-sizing: border-box;
         }
@@ -29,28 +29,23 @@
             width: 100%;
         }
         
-        /* Mobile Responsiveness */
         @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-            body {
-                padding: 20px 15px;
-            }
+            .container { flex-direction: column; }
+            body { padding: 20px 15px; }
         }
 
         .main-stage {
             flex: 2;
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 32px;
             padding: 28px;
             display: flex;
             flex-direction: column;
-            min-height: 540px;
+            min-height: 560px;
             position: relative;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            box-shadow: 0 40px 80px rgba(0,0,0,0.6);
         }
         .header-panel {
             display: flex;
@@ -58,20 +53,21 @@
             align-items: center;
             width: 100%;
             z-index: 10;
+            margin-bottom: 12px;
         }
         .status-pill {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 1px;
             font-weight: 800;
             color: #94a3b8;
-            background: rgba(0,0,0,0.3);
+            background: rgba(0,0,0,0.4);
             padding: 8px 16px;
             border-radius: 100px;
         }
         .balance-pill {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            background: rgba(52, 211, 153, 0.1);
+            border: 1px solid rgba(52, 211, 153, 0.25);
             color: #34d399;
             padding: 10px 24px;
             border-radius: 100px;
@@ -79,14 +75,39 @@
             font-size: 1.15rem;
             transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
+        
+        /* New Premium History Strip */
+        .history-strip {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            z-index: 10;
+        }
+        .history-badge {
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 6px 14px;
+            border-radius: 100px;
+            background: rgba(255,255,255,0.05);
+            color: #cbd5e1;
+            border: 1px solid rgba(255,255,255,0.05);
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: scale(0.8) translateX(-10px); opacity: 0; }
+            to { transform: scale(1) translateX(0); opacity: 1; }
+        }
+
         .canvas-container {
             position: relative;
             flex: 1;
             width: 100%;
-            margin: 16px 0;
+            margin-bottom: 18px;
             border-radius: 24px;
             overflow: hidden;
-            background: linear-gradient(to bottom, #1e3a8a, #0f172a); /* Sky background */
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.5);
         }
         canvas {
             display: block;
@@ -95,7 +116,7 @@
         }
         .live-multiplier-overlay {
             position: absolute;
-            top: 40px;
+            top: 45px;
             left: 50%;
             transform: translateX(-50%);
             font-size: 4.5rem;
@@ -104,8 +125,7 @@
             pointer-events: none;
             z-index: 5;
             font-variant-numeric: tabular-nums;
-            text-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            transition: transform 0.1s ease;
+            text-shadow: 0 4px 24px rgba(0,0,0,0.6);
         }
         .controls {
             width: 100%;
@@ -113,17 +133,30 @@
             gap: 16px;
             z-index: 10;
         }
+        .currency-input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .currency-label {
+            position: absolute;
+            left: 18px;
+            font-weight: 800;
+            color: #64748b;
+            font-size: 1.1rem;
+            pointer-events: none;
+        }
         input {
-            width: 110px;
+            width: 120px;
             background: rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 20px;
-            padding: 18px;
+            padding: 18px 12px 18px 42px;
             color: white;
             font-size: 1.25rem;
             font-weight: 700;
-            text-align: center;
             outline: none;
+            box-sizing: border-box;
         }
         button {
             flex: 1;
@@ -136,16 +169,16 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        .btn-bet { background: #3b82f6; color: #fff; box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3); }
-        .btn-bet:hover { transform: translateY(-2px); background: #60a5fa; }
+        .btn-bet { background: #2563eb; color: #fff; box-shadow: 0 4px 20px rgba(37, 99, 235, 0.25); }
+        .btn-bet:hover { transform: translateY(-2px); background: #3b82f6; }
         .btn-cash { background: #10b981; color: #fff; box-shadow: 0 4px 25px rgba(16, 185, 129, 0.3); }
         .btn-cash:hover { transform: scale(1.02); background: #34d399; }
-        .btn-disabled { background: #1e293b; color: #64748b; cursor: not-allowed; border: 1px solid #334155;}
+        .btn-disabled { background: #1e293b; color: #475569; cursor: not-allowed; border: 1px solid #334155;}
 
         .side-panel {
             flex: 1;
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.04);
             border-radius: 32px;
             padding: 24px;
             min-height: 300px;
@@ -157,13 +190,13 @@
             font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 1px;
-            color: #cbd5e1;
+            color: #94a3b8;
             margin-bottom: 16px;
             font-weight: 700;
         }
         .ledger-content {
             font-size: 0.9rem;
-            color: #94a3b8;
+            color: #cbd5e1;
             overflow-y: auto;
             flex: 1;
             display: flex;
@@ -171,7 +204,7 @@
             gap: 12px;
         }
         .toast-win {
-            color: #059669;
+            color: #047857;
             font-weight: 600;
             background: #d1fae5;
             padding: 10px 14px;
@@ -179,17 +212,17 @@
             border-left: 4px solid #10b981;
         }
         .toast-normal {
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.04);
             padding: 10px 14px;
             border-radius: 12px;
         }
         .vyeta-footer {
-            margin-top: 30px;
-            padding-bottom: 20px;
+            margin-top: 32px;
+            padding-bottom: 10px;
             font-size: 0.8rem;
             letter-spacing: 2px;
             text-transform: uppercase;
-            color: rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.25);
             font-weight: 600;
             text-align: center;
         }
@@ -200,8 +233,13 @@
     <div class="container">
         <div class="main-stage">
             <div class="header-panel">
-                <div id="status-text" class="status-pill">Warming up...</div>
-                <div class="balance-pill" id="balance-pill">Wallet: $<span id="balance-display">1000.00</span></div>
+                <div id="status-text" class="status-pill">Warming engines...</div>
+                <div class="balance-pill" id="balance-pill">Wallet: K<span id="balance-display">1,000.00</span></div>
+            </div>
+
+            <!-- Recent Flight History Board -->
+            <div class="history-strip" id="history-strip">
+                <!-- Live badges spawn here dynamically -->
             </div>
 
             <div class="canvas-container">
@@ -210,7 +248,10 @@
             </div>
 
             <div class="controls">
-                <input type="number" id="bet-input" value="10" min="1">
+                <div class="currency-input-wrap">
+                    <span class="currency-label">K</span>
+                    <input type="number" id="bet-input" value="50" min="5">
+                </div>
                 <button id="action-btn" class="btn-disabled">PLEASE WAIT...</button>
             </div>
         </div>
@@ -221,11 +262,10 @@
         </div>
     </div>
 
-    <!-- Premium Corporate Sticker -->
     <div class="vyeta-footer">Powered by Vyeta Digital Solutions</div>
 
     <script>
-        // CORE SERVICE CONNECTION - UPDATE THIS URL!
+        // CORE CONFIGURATION - UPDATE WITH YOUR LIVE RENDER SERVER LINK
         const SERVER_URL = "https://kids-games-o79b.onrender.com"; 
         const socket = io(SERVER_URL);
 
@@ -236,11 +276,16 @@
         let gameState = 'waiting'; 
         let countdownTimer = null;
 
-        // Physics & Effects
+        // Audio System State
+        let audioCtx = null;
+        let flightOscillator = null;
+
+        // FX Physics Engines
         let floatOffset = 0;
         let particles = [];
         let burstShards = [];
         let clouds = [];
+        let stars = [];
         let shockwaveRadius = 0;
         let triggerShockwave = false;
 
@@ -251,16 +296,17 @@
         const actionBtn = document.getElementById('action-btn');
         const betInput = document.getElementById('bet-input');
         const ledgerContent = document.getElementById('ledger-content');
+        const historyStrip = document.getElementById('history-strip');
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
         function resizeCanvas() {
-            // Add a slight delay to ensure flexbox has calculated dimensions
             setTimeout(() => {
                 canvas.width = canvas.parentElement.clientWidth;
                 canvas.height = canvas.parentElement.clientHeight;
                 initClouds();
+                initStars();
             }, 50);
         }
         window.addEventListener('resize', resizeCanvas);
@@ -271,22 +317,105 @@
             div.className = isWin ? "toast-win" : "toast-normal";
             div.innerText = msg;
             ledgerContent.prepend(div);
-            // Keep log short to prevent infinite scrolling
-            if(ledgerContent.children.length > 15) {
-                ledgerContent.removeChild(ledgerContent.lastChild);
+            if(ledgerContent.children.length > 12) ledgerContent.removeChild(ledgerContent.lastChild);
+        }
+
+        // --- GAME SOUNDS SYNTH (WEB AUDIO API) ---
+        function initAudioEngine() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
         }
 
-        // --- CLOUD SYSTEM ---
+        function startFlightSound() {
+            try {
+                initAudioEngine();
+                if(flightOscillator) flightOscillator.stop();
+                
+                flightOscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                flightOscillator.type = 'sine';
+                flightOscillator.frequency.setValueAtTime(120, audioCtx.currentTime); // Low engine hum
+                
+                gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime); 
+                
+                flightOscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                flightOscillator.start();
+            } catch(e) { console.log(e); }
+        }
+
+        function updateFlightSound(multiplier) {
+            if (flightOscillator && audioCtx) {
+                // Pitch climbs smoothly as altitude climbs
+                let targetFreq = 120 + (multiplier * 45);
+                flightOscillator.frequency.setValueAtTime(Math.min(targetFreq, 800), audioCtx.currentTime);
+            }
+        }
+
+        function stopFlightSound() {
+            try {
+                if (flightOscillator) {
+                    flightOscillator.stop();
+                    flightOscillator = null;
+                }
+            } catch(e){}
+        }
+
+        function playCashOutSound() {
+            try {
+                initAudioEngine();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } catch(e){}
+        }
+
+        function playPopSound() {
+            try {
+                initAudioEngine();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(60, audioCtx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } catch(e){}
+        }
+
+        // --- ENVIRONMENTAL GRAPHICS PARALLAX ---
         function initClouds() {
             clouds = [];
-            for(let i = 0; i < 8; i++) {
+            for(let i = 0; i < 6; i++) {
                 clouds.push({
                     x: Math.random() * canvas.width,
                     y: Math.random() * canvas.height,
-                    size: 30 + Math.random() * 50,
-                    speed: 0.5 + Math.random() * 1.5,
-                    opacity: 0.1 + Math.random() * 0.2
+                    size: 25 + Math.random() * 40,
+                    speed: 0.4 + Math.random() * 1.2,
+                    opacity: 0.08 + Math.random() * 0.15
+                });
+            }
+        }
+
+        function initStars() {
+            stars = [];
+            for(let i=0; i<30; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2,
+                    twinkleSpeed: 0.02 + Math.random() * 0.05,
+                    alpha: Math.random()
                 });
             }
         }
@@ -295,72 +424,93 @@
             ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
             ctx.beginPath();
             ctx.arc(x, y, size, 0, Math.PI * 2);
-            ctx.arc(x + size * 0.8, y - size * 0.3, size * 0.8, 0, Math.PI * 2);
-            ctx.arc(x + size * 1.6, y, size * 0.9, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.7, y - size * 0.25, size * 0.8, 0, Math.PI * 2);
+            ctx.arc(x + size * 1.4, y, size * 0.8, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // --- ARTISTIC GRAPHICS PIPELINE ---
         function drawScene() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // DYNAMIC ATMOSPHERIC GRADIENT EVOLUTION
+            let skyGlow = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (globalMultiplier < 2) {
+                // Tier 1: Crisp African Blue Sky
+                skyGlow.addColorStop(0, '#1e40af');
+                skyGlow.addColorStop(1, '#0f172a');
+            } else if (globalMultiplier >= 2 && globalMultiplier < 5) {
+                // Tier 2: Warm Zambian Sunset Sunset
+                let progress = Math.min((globalMultiplier - 2) / 3, 1);
+                let topColor = d3Blend('#1e40af', '#7c2d12', progress);
+                let btmColor = d3Blend('#0f172a', '#1e1b4b', progress);
+                skyGlow.addColorStop(0, topColor);
+                skyGlow.addColorStop(1, btmColor);
+            } else {
+                // Tier 3: Cosmic Deep Purple / Outer space
+                skyGlow.addColorStop(0, '#4c1d95');
+                skyGlow.addColorStop(1, '#030712');
+            }
+            ctx.fillStyle = skyGlow;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Render Stars if high in outer space
+            if (globalMultiplier > 3.5) {
+                stars.forEach(s => {
+                    s.alpha += s.twinkleSpeed;
+                    if(s.alpha > 1 || s.alpha < 0) s.twinkleSpeed = -s.twinkleSpeed;
+                    ctx.fillStyle = `rgba(255,255,255,${Math.max(s.alpha, 0)})`;
+                    ctx.fillRect(s.x, s.y, s.size, s.size);
+                    if(gameState === 'flying') s.y += (globalMultiplier * 0.2);
+                    if(s.y > canvas.height) s.y = 0;
+                });
+            }
+
+            // Render Clouds
+            clouds.forEach(c => {
+                drawCloud(c.x, c.y, c.size, c.opacity);
+                if(gameState === 'flying') {
+                    c.y += c.speed * (1 + (globalMultiplier * 0.4));
+                } else if (gameState === 'waiting') {
+                    c.y += c.speed * 0.15;
+                }
+                if(c.y > canvas.height + 80) {
+                    c.y = -80; c.x = Math.random() * canvas.width;
+                }
+            });
             
             let centerX = canvas.width / 2;
             let centerY = canvas.height / 2 + 20;
             
-            // Render and Move Clouds
-            clouds.forEach(c => {
-                drawCloud(c.x, c.y, c.size, c.opacity);
-                if(gameState === 'flying') {
-                    // Clouds move down faster as multiplier goes up
-                    c.y += c.speed * (1 + (globalMultiplier * 0.5));
-                } else if (gameState === 'waiting') {
-                    // Gentle drift while boarding
-                    c.y += c.speed * 0.2;
-                }
-                
-                // Wrap clouds back to the top
-                if(c.y > canvas.height + 100) {
-                    c.y = -100;
-                    c.x = Math.random() * canvas.width;
-                }
-            });
-            
-            // Generate fluid floating drift
             floatOffset += 0.04;
             if (gameState === 'flying' || gameState === 'waiting') {
                 centerY += Math.sin(floatOffset) * 8; 
             }
             
-            let balloonSize = 45 + Math.min(globalMultiplier * 10, 100);
+            let balloonSize = 45 + Math.min(globalMultiplier * 9, 95);
             
-            // Text scaling effect
             if (gameState === 'flying') {
-                let textScale = 1 + Math.min((globalMultiplier - 1) * 0.02, 0.2);
+                let textScale = 1 + Math.min((globalMultiplier - 1) * 0.02, 0.18);
                 multiplierDisplay.style.transform = `translateX(-50%) scale(${textScale})`;
             } else {
                 multiplierDisplay.style.transform = `translateX(-50%) scale(1)`;
             }
 
-            // High-tension shaking mechanics
             if (globalMultiplier > 3.5 && gameState === 'flying') {
-                centerX += (Math.random() - 0.5) * (globalMultiplier * 0.7);
-                centerY += (Math.random() - 0.5) * (globalMultiplier * 0.7);
+                centerX += (Math.random() - 0.5) * (globalMultiplier * 0.6);
+                centerY += (Math.random() - 0.5) * (globalMultiplier * 0.6);
             }
 
-            // RENDER BALLOON
+            // BALLOON CORE DESIGN
             if (gameState !== 'crashed') {
                 let colorGlow = ctx.createLinearGradient(centerX - balloonSize, centerY - balloonSize, centerX + balloonSize, centerY + balloonSize);
                 if (globalMultiplier < 2) {
-                    colorGlow.addColorStop(0, '#60a5fa'); colorGlow.addColorStop(1, '#2563eb');
+                    colorGlow.addColorStop(0, '#3b82f6'); colorGlow.addColorStop(1, '#1d4ed8');
                 } else if (globalMultiplier < 5) {
-                    colorGlow.addColorStop(0, '#fbbf24'); colorGlow.addColorStop(1, '#d97706');
+                    colorGlow.addColorStop(0, '#f59e0b'); colorGlow.addColorStop(1, '#b45309');
                 } else {
-                    colorGlow.addColorStop(0, '#f87171'); colorGlow.addColorStop(1, '#dc2626');
+                    colorGlow.addColorStop(0, '#ef4444'); colorGlow.addColorStop(1, '#b91c1c');
                 }
 
-                // Ropes
                 ctx.beginPath();
-                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                ctx.strokeStyle = 'rgba(255,255,255,0.35)';
                 ctx.lineWidth = 1.5;
                 ctx.moveTo(centerX - balloonSize * 0.25, centerY + balloonSize * 0.4);
                 ctx.lineTo(centerX - 14, centerY + balloonSize + 18);
@@ -368,77 +518,52 @@
                 ctx.lineTo(centerX + 14, centerY + balloonSize + 18);
                 ctx.stroke();
 
-                // Basket
                 ctx.fillStyle = '#451a03';
                 ctx.beginPath();
                 ctx.roundRect(centerX - 16, centerY + balloonSize + 18, 32, 22, 5);
                 ctx.fill();
 
-                // Balloon envelope
                 ctx.beginPath();
                 ctx.fillStyle = colorGlow;
                 ctx.arc(centerX, centerY, balloonSize, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Outer structural glass-glare
                 ctx.beginPath();
-                ctx.fillStyle = 'rgba(255,255,255,0.15)';
-                ctx.arc(centerX - balloonSize * 0.25, centerY - balloonSize * 0.25, balloonSize * 0.5, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                ctx.arc(centerX - balloonSize * 0.28, centerY - balloonSize * 0.28, balloonSize * 0.45, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // WINNER SHOCKWAVE EFFECT
+            // SHOCKWAVE WIN ACTION
             if (triggerShockwave) {
-                shockwaveRadius += 15;
+                shockwaveRadius += 14;
                 ctx.beginPath();
-                ctx.strokeStyle = `rgba(52, 211, 153, ${Math.max(1 - (shockwaveRadius / 300), 0)})`;
-                ctx.lineWidth = 6;
+                ctx.strokeStyle = `rgba(52, 211, 153, ${Math.max(1 - (shockwaveRadius / 280), 0)})`;
+                ctx.lineWidth = 5;
                 ctx.arc(centerX, centerY, shockwaveRadius, 0, Math.PI * 2);
                 ctx.stroke();
-                if (shockwaveRadius > 300) triggerShockwave = false;
+                if (shockwaveRadius > 280) triggerShockwave = false;
             }
 
-            // WIN PARTICLES (MAGNETIC PULL TO WALLET)
+            // WALLET PARTICLES
             let targetX = canvas.width - 40;
             let targetY = -20; 
-            
             for (let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i];
-                p.x += (targetX - p.x) * 0.1;
-                p.y += (targetY - p.y) * 0.1;
-                p.alpha -= 0.005;
-
-                ctx.save();
-                ctx.globalAlpha = Math.max(p.alpha, 0);
-                ctx.fillStyle = '#34d399';
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-
-                if (Math.abs(p.x - targetX) < 30 && Math.abs(p.y - targetY) < 30) {
+                let p = particles[i]; p.x += (targetX - p.x) * 0.12; p.y += (targetY - p.y) * 0.12; p.alpha -= 0.006;
+                ctx.save(); ctx.globalAlpha = Math.max(p.alpha, 0); ctx.fillStyle = '#34d399'; ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+                if (Math.abs(p.x - targetX) < 25 && Math.abs(p.y - targetY) < 25) {
                     particles.splice(i, 1);
-                    balancePill.style.transform = "scale(1.08)";
-                    setTimeout(() => balancePill.style.transform = "scale(1)", 150);
+                    balancePill.style.transform = "scale(1.1)";
+                    setTimeout(() => balancePill.style.transform = "scale(1)", 120);
                 }
             }
 
-            // CATASTROPHIC BURST PARTICLES
+            // EXPLOSION SHARDS
             for (let i = burstShards.length - 1; i >= 0; i--) {
-                let s = burstShards[i];
-                s.x += s.vx;
-                s.y += s.vy;
-                s.vy += 0.2; // Gravity
-                s.alpha -= 0.02;
-
-                ctx.save();
-                ctx.globalAlpha = Math.max(s.alpha, 0);
-                ctx.fillStyle = s.color;
-                ctx.beginPath();
-                ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-
+                let s = burstShards[i]; s.x += s.vx; s.y += s.vy; s.vy += 0.18; s.alpha -= 0.018;
+                ctx.save(); ctx.globalAlpha = Math.max(s.alpha, 0); ctx.fillStyle = s.color; ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill(); ctx.restore();
                 if (s.alpha <= 0) burstShards.splice(i, 1);
             }
 
@@ -446,45 +571,49 @@
         }
         requestAnimationFrame(drawScene);
 
+        // Helper calculation tool to mix colors smoothly inline
+        function d3Blend(c1, c2, p) {
+            const f = parseInt(c1.slice(1), 16), t = parseInt(c2.slice(1), 16),
+                  R1 = f >> 16, G1 = f >> 8 & 0x00FF, B1 = f & 0x0000FF,
+                  R2 = t >> 16, G2 = t >> 8 & 0x00FF, B2 = t & 0x0000FF;
+            return "#" + (0x1000000 + (Math.round((R2 - R1) * p) + R1) * 0x10000 + (Math.round((G2 - G1) * p) + G1) * 0x100 + (Math.round((B2 - B1) * p) + B1)).toString(16).slice(1);
+        }
+
         function triggerWinAnimation() {
-            shockwaveRadius = 0;
-            triggerShockwave = true;
-            let startX = canvas.width / 2;
-            let startY = canvas.height / 2 + 20 + Math.sin(floatOffset) * 8;
-            
-            for(let i=0; i<30; i++){
-                particles.push({
-                    x: startX + (Math.random() - 0.5) * 40,
-                    y: startY + (Math.random() - 0.5) * 40,
-                    size: Math.random() * 6 + 4,
-                    alpha: 1.5
-                });
+            shockwaveRadius = 0; triggerShockwave = true;
+            let startX = canvas.width / 2; let startY = canvas.height / 2 + 20 + Math.sin(floatOffset) * 8;
+            for(let i=0; i<25; i++) {
+                particles.push({ x: startX + (Math.random() - 0.5) * 35, y: startY + (Math.random() - 0.5) * 35, size: Math.random() * 5 + 3, alpha: 1.4 });
             }
         }
 
         function triggerBurstAnimation() {
-            let startX = canvas.width / 2;
-            let startY = canvas.height / 2 + 20 + Math.sin(floatOffset) * 8;
+            let startX = canvas.width / 2; let startY = canvas.height / 2 + 20 + Math.sin(floatOffset) * 8;
             let fragmentColor = globalMultiplier < 2 ? '#3b82f6' : globalMultiplier < 5 ? '#f59e0b' : '#ef4444';
-
-            for (let i = 0; i < 50; i++) {
-                let angle = Math.random() * Math.PI * 2;
-                let speed = Math.random() * 10 + 2;
-                burstShards.push({
-                    x: startX,
-                    y: startY,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    size: Math.random() * 8 + 3,
-                    color: fragmentColor,
-                    alpha: 1.0
-                });
+            for (let i = 0; i < 45; i++) {
+                let angle = Math.random() * Math.PI * 2; let speed = Math.random() * 9 + 2;
+                burstShards.push({ x: startX, y: startY, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: Math.random() * 7 + 2, color: fragmentColor, alpha: 1.0 });
             }
         }
 
-        // --- GAME LOGIC & NETWORKING ---
+        // Add element to history board strip interface
+        function appendHistoryBadge(val) {
+            const badge = document.createElement('div');
+            badge.className = "history-badge";
+            badge.innerText = val.toFixed(2) + "x";
+            
+            if(val < 2) { badge.style.color = "#93c5fd"; badge.style.borderColor = "rgba(59,130,246,0.2)"; }
+            else if(val < 5) { badge.style.color = "#fcd34d"; badge.style.borderColor = "rgba(245,158,11,0.2)"; }
+            else { badge.style.color = "#fca5a5"; badge.style.borderColor = "rgba(239,68,68,0.2)"; badge.style.boxShadow = "0 0 10px rgba(239,68,68,0.1)"; }
+            
+            historyStrip.prepend(badge);
+            if(historyStrip.children.length > 7) historyStrip.removeChild(historyStrip.lastChild);
+        }
+
+        // --- CUSTOMER-ORIENTED SOCKET DISPATCHERS ---
 
         socket.on('betting_phase_started', () => {
+            stopFlightSound();
             gameState = 'waiting';
             isInFlight = false;
             hasBetInRound = false;
@@ -494,28 +623,29 @@
             multiplierDisplay.innerText = "1.00x";
             
             actionBtn.className = "btn-bet";
-            actionBtn.innerText = "JOIN NEXT FLIGHT";
+            actionBtn.innerText = "BUY FLIGHT TICKET";
             betInput.disabled = false;
 
-            // Start Live Countdown
             let timeLeft = 6;
-            statusText.innerText = `Boarding... Doors close in ${timeLeft}s`;
+            statusText.innerText = `Boarding... Flight departs in ${timeLeft}s`;
             statusText.style.color = "#fbbf24";
             
             if(countdownTimer) clearInterval(countdownTimer);
             countdownTimer = setInterval(() => {
                 timeLeft--;
                 if(timeLeft > 0) {
-                    statusText.innerText = `Boarding... Doors close in ${timeLeft}s`;
+                    statusText.innerText = `Boarding... Flight departs in ${timeLeft}s`;
                 } else {
                     clearInterval(countdownTimer);
-                    statusText.innerText = "Ignition...";
+                    statusText.innerText = "Releasing safety valves...";
                 }
             }, 1000);
         });
 
         socket.on('game_started', () => {
             if(countdownTimer) clearInterval(countdownTimer);
+            initAudioEngine();
+            startFlightSound();
             
             gameState = 'flying';
             isInFlight = true;
@@ -525,7 +655,7 @@
 
             if (hasBetInRound) {
                 actionBtn.className = "btn-cash";
-                actionBtn.innerText = "COLLECT WINNINGS";
+                actionBtn.innerText = "COLLECT KWACHA";
             } else {
                 actionBtn.className = "btn-disabled";
                 actionBtn.innerText = "FLIGHT IN PROGRESS";
@@ -535,6 +665,7 @@
         socket.on('multiplier_tick', (data) => {
             globalMultiplier = data.multiplier;
             multiplierDisplay.innerText = data.multiplier.toFixed(2) + "x";
+            updateFlightSound(globalMultiplier);
             
             if(globalMultiplier >= 2 && globalMultiplier < 5) {
                 multiplierDisplay.style.color = "#fbbf24";
@@ -544,17 +675,21 @@
 
             if (hasBetInRound) {
                 const liveWinnings = (parseFloat(betInput.value) * data.multiplier).toFixed(2);
-                actionBtn.innerText = `COLLECT $${liveWinnings}`;
+                actionBtn.innerText = `COLLECT K${liveWinnings}`;
             }
         });
 
         socket.on('game_crashed', (data) => {
             if(countdownTimer) clearInterval(countdownTimer);
+            stopFlightSound();
+            playPopSound();
+            
             gameState = 'crashed';
             isInFlight = false;
             globalMultiplier = data.crashedAt;
             
             triggerBurstAnimation();
+            appendHistoryBadge(data.crashedAt);
             
             statusText.innerText = "Oh no, it popped!";
             statusText.style.color = "#ef4444";
@@ -569,32 +704,37 @@
         socket.on('bet_confirmed', (data) => {
             hasBetInRound = true;
             currentBalance = data.balance;
-            balanceDisplay.innerText = currentBalance.toFixed(2);
+            balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "TICKET CONFIRMED!";
+            actionBtn.innerText = "TICKET SECURED!";
             betInput.disabled = true;
+            initAudioEngine(); // Pre-trigger audio focus context window
         });
 
         socket.on('cash_out_success', (data) => {
             hasBetInRound = false;
             currentBalance = data.balance;
-            balanceDisplay.innerText = currentBalance.toFixed(2);
+            balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "SAFE LANDING!";
+            actionBtn.innerText = "CASH SECURED!";
             
+            playCashOutSound();
             triggerWinAnimation();
-            addLog(`Awesome! You safely collected $${data.winnings}`, true);
+            addLog(`Awesome! You safely collected K${data.winnings.toFixed(2)}`, true);
         });
 
         socket.on('ledger_update', (data) => {
-            let userMsg = data.message.replace("Player placed a bet of", "A player bought a ticket for");
+            // Map raw server lines into friendly local currency expressions
+            let userMsg = data.message.replace("Player placed a bet of", "A player bought a ticket for K");
             userMsg = userMsg.replace("Player cashed out", "A player jumped to safety");
+            userMsg = userMsg.replace("wins", "and collected K");
             addLog(userMsg);
         });
 
         socket.on('error_message', (data) => { alert(data.message); });
 
         actionBtn.addEventListener('click', () => {
+            initAudioEngine(); // Safely unlock browser audio policies
             if (!isInFlight && !hasBetInRound && actionBtn.className !== "btn-disabled") {
                 socket.emit('place_bet', { amount: betInput.value });
             } else if (isInFlight && hasBetInRound) {
