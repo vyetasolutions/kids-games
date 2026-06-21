@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vyeta Kwacha Balloon Adventures</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <!-- Import Supabase for the Frontend -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body {
             background: linear-gradient(135deg, #090d16, #111827);
@@ -311,61 +309,35 @@
     <div class="vyeta-footer">Powered by Vyeta Digital Solutions</div>
 
     <script>
-        // 1. Initialize Supabase
-        const supabaseUrl = 'https://uccdevvfexfpxnnwtpxa.supabase.co';
-        const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_'; // Replace with your actual key
-        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-
-        // 2. Global Socket Variable
+        // 1. Global Socket Variable
         let socket;
         const SERVER_URL = "https://kids-games-o79b.onrender.com"; 
 
-        // 3. The Session Catcher
-        supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-                if (session) {
-                    console.log("Flight deck access granted for:", session.user.email);
-                    
-                    // Connect to the server AND pass the secure VIP token!
-                    socket = io(SERVER_URL, {
-                        auth: {
-                            token: session.access_token 
-                        }
-                    });
+        // 2. Connect straight away — no login required for now.
+        socket = io(SERVER_URL);
 
-                    // Surface connection problems instead of staying silently stuck
-                    // on "PLEASE WAIT..." — this is what was making the page look static.
-                    socket.on('connect_error', (err) => {
-                        console.error("Socket connect_error:", err.message);
-                        statusText.innerText = "Connection failed: " + err.message;
-                        statusText.style.color = "#ef4444";
-                        actionBtn.className = "btn-disabled";
-                        actionBtn.innerText = "RECONNECTING...";
-                    });
-
-                    socket.on('disconnect', (reason) => {
-                        console.warn("Socket disconnected:", reason);
-                        statusText.innerText = "Disconnected: " + reason;
-                        statusText.style.color = "#ef4444";
-                        actionBtn.className = "btn-disabled";
-                        actionBtn.innerText = "RECONNECTING...";
-                    });
-
-                    // Sync the real balance from the server instead of the
-                    // hardcoded 1000.00 placeholder.
-                    socket.on('initial_state', (data) => {
-                        currentBalance = data.balance;
-                        balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    });
-
-                    // Initialize the game connections now that we are verified
-                    initializeGameListeners();
-                } else {
-                    console.log("No active session. Rerouting to gateway.");
-                    window.location.href = "auth.html";
-                }
-            }
+        socket.on('connect_error', (err) => {
+            console.error("Socket connect_error:", err.message);
+            statusText.innerText = "Connection failed: " + err.message;
+            statusText.style.color = "#ef4444";
+            actionBtn.className = "btn-disabled";
+            actionBtn.innerText = "RECONNECTING...";
         });
+
+        socket.on('disconnect', (reason) => {
+            console.warn("Socket disconnected:", reason);
+            statusText.innerText = "Disconnected: " + reason;
+            statusText.style.color = "#ef4444";
+            actionBtn.className = "btn-disabled";
+            actionBtn.innerText = "RECONNECTING...";
+        });
+
+        socket.on('initial_state', (data) => {
+            currentBalance = data.balance;
+            balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        });
+
+        initializeGameListeners();
 
         // --- GLOBAL GAME STATE ---
         let currentBalance = 1000.00;
