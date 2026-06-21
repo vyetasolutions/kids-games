@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vyeta Balloon Ascent Arena</title>
+    <title>Vyeta Balloon Adventures</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <style>
         body {
-            background-color: #060913;
+            background: linear-gradient(135deg, #0f172a, #1e293b);
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
@@ -16,28 +16,41 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto; /* Fixed mobile scrolling */
+            padding: 40px 20px;
+            box-sizing: border-box;
         }
         .container {
             display: flex;
+            flex-direction: row;
             gap: 24px;
             max-width: 1000px;
             width: 100%;
-            padding: 20px;
-            box-sizing: border-box;
         }
+        
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            body {
+                padding: 20px 15px;
+            }
+        }
+
         .main-stage {
             flex: 2;
-            background: rgba(255, 255, 255, 0.01);
-            backdrop-filter: blur(30px);
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 32px;
             padding: 28px;
             display: flex;
             flex-direction: column;
-            height: 540px;
+            min-height: 540px;
             position: relative;
-            box-shadow: 0 40px 80px rgba(0,0,0,0.7);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
         }
         .header-panel {
             display: flex;
@@ -47,16 +60,19 @@
             z-index: 10;
         }
         .status-pill {
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            font-weight: 700;
-            color: #64748b;
+            letter-spacing: 1px;
+            font-weight: 800;
+            color: #94a3b8;
+            background: rgba(0,0,0,0.3);
+            padding: 8px 16px;
+            border-radius: 100px;
         }
         .balance-pill {
-            background: rgba(34, 197, 94, 0.06);
-            border: 1px solid rgba(34, 197, 94, 0.2);
-            color: #4ade80;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
             padding: 10px 24px;
             border-radius: 100px;
             font-weight: 700;
@@ -67,17 +83,19 @@
             position: relative;
             flex: 1;
             width: 100%;
-            margin: 12px 0;
+            margin: 16px 0;
+            border-radius: 24px;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #1e3a8a, #0f172a); /* Sky background */
         }
         canvas {
             display: block;
             width: 100%;
             height: 100%;
-            border-radius: 24px;
         }
         .live-multiplier-overlay {
             position: absolute;
-            top: 30px;
+            top: 40px;
             left: 50%;
             transform: translateX(-50%);
             font-size: 4.5rem;
@@ -86,7 +104,7 @@
             pointer-events: none;
             z-index: 5;
             font-variant-numeric: tabular-nums;
-            text-shadow: 0 8px 30px rgba(0,0,0,0.7);
+            text-shadow: 0 4px 20px rgba(0,0,0,0.5);
             transition: transform 0.1s ease;
         }
         .controls {
@@ -96,9 +114,9 @@
             z-index: 10;
         }
         input {
-            width: 130px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            width: 110px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 20px;
             padding: 18px;
             color: white;
@@ -111,60 +129,69 @@
             flex: 1;
             border: none;
             border-radius: 20px;
-            font-size: 1.25rem;
+            font-size: 1.15rem;
             font-weight: 800;
             cursor: pointer;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        .btn-bet { background: #f59e0b; color: #000; box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15); }
-        .btn-bet:hover { transform: translateY(-2px); background: #fbbf24; }
-        .btn-cash { background: #10b981; color: #fff; box-shadow: 0 4px 25px rgba(16, 185, 129, 0.25); }
-        .btn-cash:hover { transform: scale(1.02); }
-        .btn-disabled { background: #121724; color: #475569; cursor: not-allowed; }
+        .btn-bet { background: #3b82f6; color: #fff; box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3); }
+        .btn-bet:hover { transform: translateY(-2px); background: #60a5fa; }
+        .btn-cash { background: #10b981; color: #fff; box-shadow: 0 4px 25px rgba(16, 185, 129, 0.3); }
+        .btn-cash:hover { transform: scale(1.02); background: #34d399; }
+        .btn-disabled { background: #1e293b; color: #64748b; cursor: not-allowed; border: 1px solid #334155;}
 
         .side-panel {
             flex: 1;
-            background: rgba(0, 0, 0, 0.25);
-            border: 1px solid rgba(255, 255, 255, 0.03);
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: 32px;
             padding: 24px;
-            height: 540px;
+            min-height: 300px;
             display: flex;
             flex-direction: column;
             box-sizing: border-box;
         }
         .ledger-title {
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: #475569;
+            letter-spacing: 1px;
+            color: #cbd5e1;
             margin-bottom: 16px;
             font-weight: 700;
         }
         .ledger-content {
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             color: #94a3b8;
             overflow-y: auto;
             flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
         }
         .toast-win {
-            color: #34d399;
+            color: #059669;
             font-weight: 600;
-            background: rgba(16, 185, 129, 0.05);
-            padding: 8px 14px;
+            background: #d1fae5;
+            padding: 10px 14px;
             border-radius: 12px;
             border-left: 4px solid #10b981;
         }
+        .toast-normal {
+            background: rgba(255,255,255,0.05);
+            padding: 10px 14px;
+            border-radius: 12px;
+        }
         .vyeta-footer {
-            margin-top: 24px;
-            font-size: 0.75rem;
+            margin-top: 30px;
+            padding-bottom: 20px;
+            font-size: 0.8rem;
             letter-spacing: 2px;
             text-transform: uppercase;
-            color: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.3);
             font-weight: 600;
+            text-align: center;
         }
     </style>
 </head>
@@ -173,31 +200,32 @@
     <div class="container">
         <div class="main-stage">
             <div class="header-panel">
-                <div id="status-text" class="status-pill">Connecting...</div>
-                <div class="balance-pill" id="balance-pill">Balance: $<span id="balance-display">1000.00</span></div>
+                <div id="status-text" class="status-pill">Warming up...</div>
+                <div class="balance-pill" id="balance-pill">Wallet: $<span id="balance-display">1000.00</span></div>
             </div>
 
             <div class="canvas-container">
-                <div id="multiplier-display" class="live-multiplier-overlay" style="color: #475569;">1.00x</div>
+                <div id="multiplier-display" class="live-multiplier-overlay" style="color: #cbd5e1;">1.00x</div>
                 <canvas id="gameCanvas"></canvas>
             </div>
 
             <div class="controls">
                 <input type="number" id="bet-input" value="10" min="1">
-                <button id="action-btn" class="btn-disabled">LOADING ENGINE</button>
+                <button id="action-btn" class="btn-disabled">PLEASE WAIT...</button>
             </div>
         </div>
 
         <div class="side-panel">
-            <div class="ledger-title">Live Room Activity</div>
+            <div class="ledger-title">Live Flight Activity</div>
             <div id="ledger-content" class="ledger-content"></div>
         </div>
     </div>
 
+    <!-- Premium Corporate Sticker -->
     <div class="vyeta-footer">Powered by Vyeta Digital Solutions</div>
 
     <script>
-        // CORE SERVICE CONNECTION
+        // CORE SERVICE CONNECTION - UPDATE THIS URL!
         const SERVER_URL = "https://kids-games-o79b.onrender.com"; 
         const socket = io(SERVER_URL);
 
@@ -206,11 +234,13 @@
         let isInFlight = false;
         let globalMultiplier = 1.00;
         let gameState = 'waiting'; 
+        let countdownTimer = null;
 
-        // Physics/Animation Tickers
+        // Physics & Effects
         let floatOffset = 0;
         let particles = [];
         let burstShards = [];
+        let clouds = [];
         let shockwaveRadius = 0;
         let triggerShockwave = false;
 
@@ -226,17 +256,48 @@
         const ctx = canvas.getContext('2d');
         
         function resizeCanvas() {
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
+            // Add a slight delay to ensure flexbox has calculated dimensions
+            setTimeout(() => {
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = canvas.parentElement.clientHeight;
+                initClouds();
+            }, 50);
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
         function addLog(msg, isWin = false) {
             const div = document.createElement('div');
-            if(isWin) div.className = "toast-win";
+            div.className = isWin ? "toast-win" : "toast-normal";
             div.innerText = msg;
             ledgerContent.prepend(div);
+            // Keep log short to prevent infinite scrolling
+            if(ledgerContent.children.length > 15) {
+                ledgerContent.removeChild(ledgerContent.lastChild);
+            }
+        }
+
+        // --- CLOUD SYSTEM ---
+        function initClouds() {
+            clouds = [];
+            for(let i = 0; i < 8; i++) {
+                clouds.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: 30 + Math.random() * 50,
+                    speed: 0.5 + Math.random() * 1.5,
+                    opacity: 0.1 + Math.random() * 0.2
+                });
+            }
+        }
+
+        function drawCloud(x, y, size, opacity) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.8, y - size * 0.3, size * 0.8, 0, Math.PI * 2);
+            ctx.arc(x + size * 1.6, y, size * 0.9, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         // --- ARTISTIC GRAPHICS PIPELINE ---
@@ -246,18 +307,35 @@
             let centerX = canvas.width / 2;
             let centerY = canvas.height / 2 + 20;
             
-            // Generate fluid, organic floating drift using mathematical sine curves
+            // Render and Move Clouds
+            clouds.forEach(c => {
+                drawCloud(c.x, c.y, c.size, c.opacity);
+                if(gameState === 'flying') {
+                    // Clouds move down faster as multiplier goes up
+                    c.y += c.speed * (1 + (globalMultiplier * 0.5));
+                } else if (gameState === 'waiting') {
+                    // Gentle drift while boarding
+                    c.y += c.speed * 0.2;
+                }
+                
+                // Wrap clouds back to the top
+                if(c.y > canvas.height + 100) {
+                    c.y = -100;
+                    c.x = Math.random() * canvas.width;
+                }
+            });
+            
+            // Generate fluid floating drift
             floatOffset += 0.04;
             if (gameState === 'flying' || gameState === 'waiting') {
                 centerY += Math.sin(floatOffset) * 8; 
             }
             
-            // Calculate scale growth based on server value
-            let balloonSize = 45 + Math.min(globalMultiplier * 14, 120);
+            let balloonSize = 45 + Math.min(globalMultiplier * 10, 100);
             
-            // Multiplier text pulse effect based on growth speed
+            // Text scaling effect
             if (gameState === 'flying') {
-                let textScale = 1 + Math.min((globalMultiplier - 1) * 0.03, 0.2);
+                let textScale = 1 + Math.min((globalMultiplier - 1) * 0.02, 0.2);
                 multiplierDisplay.style.transform = `translateX(-50%) scale(${textScale})`;
             } else {
                 multiplierDisplay.style.transform = `translateX(-50%) scale(1)`;
@@ -265,47 +343,24 @@
 
             // High-tension shaking mechanics
             if (globalMultiplier > 3.5 && gameState === 'flying') {
-                centerX += (Math.random() - 0.5) * (globalMultiplier * 0.9);
-                centerY += (Math.random() - 0.5) * (globalMultiplier * 0.9);
+                centerX += (Math.random() - 0.5) * (globalMultiplier * 0.7);
+                centerY += (Math.random() - 0.5) * (globalMultiplier * 0.7);
             }
-
-            // Radial background lightning gradients
-            let bgGlow = ctx.createRadialGradient(centerX, centerY, 5, centerX, centerY, Math.max(balloonSize * 2.8, 220));
-            if (gameState === 'flying') {
-                if(globalMultiplier < 2) {
-                    bgGlow.addColorStop(0, 'rgba(16, 185, 129, 0.05)');
-                } else if(globalMultiplier < 5) {
-                    bgGlow.addColorStop(0, 'rgba(245, 158, 11, 0.07)');
-                } else {
-                    bgGlow.addColorStop(0, 'rgba(239, 68, 68, 0.12)');
-                }
-            } else if (gameState === 'crashed') {
-                bgGlow.addColorStop(0, 'rgba(239, 68, 68, 0.01)');
-            }
-            bgGlow.addColorStop(1, 'transparent');
-            ctx.fillStyle = bgGlow;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             // RENDER BALLOON
             if (gameState !== 'crashed') {
-                let colorGlow;
+                let colorGlow = ctx.createLinearGradient(centerX - balloonSize, centerY - balloonSize, centerX + balloonSize, centerY + balloonSize);
                 if (globalMultiplier < 2) {
-                    colorGlow = ctx.createLinearGradient(centerX - balloonSize, centerY - balloonSize, centerX + balloonSize, centerY + balloonSize);
-                    colorGlow.addColorStop(0, '#34d399');
-                    colorGlow.addColorStop(1, '#059669');
+                    colorGlow.addColorStop(0, '#60a5fa'); colorGlow.addColorStop(1, '#2563eb');
                 } else if (globalMultiplier < 5) {
-                    colorGlow = ctx.createLinearGradient(centerX - balloonSize, centerY - balloonSize, centerX + balloonSize, centerY + balloonSize);
-                    colorGlow.addColorStop(0, '#fbbf24');
-                    colorGlow.addColorStop(1, '#d97706');
+                    colorGlow.addColorStop(0, '#fbbf24'); colorGlow.addColorStop(1, '#d97706');
                 } else {
-                    colorGlow = ctx.createLinearGradient(centerX - balloonSize, centerY - balloonSize, centerX + balloonSize, centerY + balloonSize);
-                    colorGlow.addColorStop(0, '#f87171');
-                    colorGlow.addColorStop(1, '#dc2626');
+                    colorGlow.addColorStop(0, '#f87171'); colorGlow.addColorStop(1, '#dc2626');
                 }
 
-                // Rigid suspension ropes
+                // Ropes
                 ctx.beginPath();
-                ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
                 ctx.lineWidth = 1.5;
                 ctx.moveTo(centerX - balloonSize * 0.25, centerY + balloonSize * 0.4);
                 ctx.lineTo(centerX - 14, centerY + balloonSize + 18);
@@ -313,15 +368,13 @@
                 ctx.lineTo(centerX + 14, centerY + balloonSize + 18);
                 ctx.stroke();
 
-                // Cargo basket
-                ctx.fillStyle = '#221816';
+                // Basket
+                ctx.fillStyle = '#451a03';
                 ctx.beginPath();
                 ctx.roundRect(centerX - 16, centerY + balloonSize + 18, 32, 22, 5);
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-                ctx.stroke();
 
-                // Balloon envelope structure
+                // Balloon envelope
                 ctx.beginPath();
                 ctx.fillStyle = colorGlow;
                 ctx.arc(centerX, centerY, balloonSize, 0, Math.PI * 2);
@@ -329,56 +382,54 @@
                 
                 // Outer structural glass-glare
                 ctx.beginPath();
-                ctx.fillStyle = 'rgba(255,255,255,0.06)';
-                ctx.arc(centerX - balloonSize * 0.25, centerY - balloonSize * 0.25, balloonSize * 0.65, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.arc(centerX - balloonSize * 0.25, centerY - balloonSize * 0.25, balloonSize * 0.5, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // WINNER CELEBRATION SHOCKWAVE EFFECT
+            // WINNER SHOCKWAVE EFFECT
             if (triggerShockwave) {
-                shockwaveRadius += 18;
+                shockwaveRadius += 15;
                 ctx.beginPath();
-                ctx.strokeStyle = `rgba(52, 211, 153, ${Math.max(1 - (shockwaveRadius / 350), 0)})`;
-                ctx.lineWidth = 5;
+                ctx.strokeStyle = `rgba(52, 211, 153, ${Math.max(1 - (shockwaveRadius / 300), 0)})`;
+                ctx.lineWidth = 6;
                 ctx.arc(centerX, centerY, shockwaveRadius, 0, Math.PI * 2);
                 ctx.stroke();
-                if (shockwaveRadius > 350) triggerShockwave = false;
+                if (shockwaveRadius > 300) triggerShockwave = false;
             }
 
-            // WINNER CASH FLOW PARTICLES (MAGNETIC PULL)
-            let targetX = canvas.width - 80;
-            let targetY = -40; 
+            // WIN PARTICLES (MAGNETIC PULL TO WALLET)
+            let targetX = canvas.width - 40;
+            let targetY = -20; 
             
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
-                p.x += (targetX - p.x) * 0.12;
-                p.y += (targetY - p.y) * 0.12;
-                p.alpha -= 0.004;
+                p.x += (targetX - p.x) * 0.1;
+                p.y += (targetY - p.y) * 0.1;
+                p.alpha -= 0.005;
 
                 ctx.save();
                 ctx.globalAlpha = Math.max(p.alpha, 0);
                 ctx.fillStyle = '#34d399';
-                ctx.shadowColor = '#10b981';
-                ctx.shadowBlur = 12;
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
 
-                if (Math.abs(p.x - targetX) < 20 && Math.abs(p.y - targetY) < 20) {
+                if (Math.abs(p.x - targetX) < 30 && Math.abs(p.y - targetY) < 30) {
                     particles.splice(i, 1);
-                    balancePill.style.transform = "scale(1.12)";
-                    setTimeout(() => balancePill.style.transform = "scale(1)", 120);
+                    balancePill.style.transform = "scale(1.08)";
+                    setTimeout(() => balancePill.style.transform = "scale(1)", 150);
                 }
             }
 
-            // CATASTROPHIC BURST PARTICLES (EXPLOSION FRAGMENTS)
+            // CATASTROPHIC BURST PARTICLES
             for (let i = burstShards.length - 1; i >= 0; i--) {
                 let s = burstShards[i];
                 s.x += s.vx;
                 s.y += s.vy;
-                s.vy += 0.15; // Realistic gravity fall downward
-                s.alpha -= 0.015;
+                s.vy += 0.2; // Gravity
+                s.alpha -= 0.02;
 
                 ctx.save();
                 ctx.globalAlpha = Math.max(s.alpha, 0);
@@ -395,46 +446,43 @@
         }
         requestAnimationFrame(drawScene);
 
-        // TRIGGER EMOTIVE CELEBRATION
         function triggerWinAnimation() {
             shockwaveRadius = 0;
             triggerShockwave = true;
             let startX = canvas.width / 2;
             let startY = canvas.height / 2 + 20 + Math.sin(floatOffset) * 8;
             
-            for(let i=0; i<45; i++){
+            for(let i=0; i<30; i++){
                 particles.push({
-                    x: startX + (Math.random() - 0.5) * 30,
-                    y: startY + (Math.random() - 0.5) * 30,
-                    size: Math.random() * 5 + 3,
-                    alpha: 1.2
+                    x: startX + (Math.random() - 0.5) * 40,
+                    y: startY + (Math.random() - 0.5) * 40,
+                    size: Math.random() * 6 + 4,
+                    alpha: 1.5
                 });
             }
         }
 
-        // TRIGGER BURST EXPLOSION
-        function triggerBurstAnimation(finalSize) {
+        function triggerBurstAnimation() {
             let startX = canvas.width / 2;
             let startY = canvas.height / 2 + 20 + Math.sin(floatOffset) * 8;
-            let fragmentColor = globalMultiplier < 2 ? '#059669' : globalMultiplier < 5 ? '#d97706' : '#dc2626';
+            let fragmentColor = globalMultiplier < 2 ? '#3b82f6' : globalMultiplier < 5 ? '#f59e0b' : '#ef4444';
 
-            // Spawn 60 velocity shrapnel components shooting outwards randomly
-            for (let i = 0; i < 60; i++) {
+            for (let i = 0; i < 50; i++) {
                 let angle = Math.random() * Math.PI * 2;
-                let speed = Math.random() * 8 + 4;
+                let speed = Math.random() * 10 + 2;
                 burstShards.push({
                     x: startX,
                     y: startY,
                     vx: Math.cos(angle) * speed,
                     vy: Math.sin(angle) * speed,
-                    size: Math.random() * 6 + 2,
+                    size: Math.random() * 8 + 3,
                     color: fragmentColor,
                     alpha: 1.0
                 });
             }
         }
 
-        // --- CUSTOMER-CENTRIC SERVER LISTENERS ---
+        // --- GAME LOGIC & NETWORKING ---
 
         socket.on('betting_phase_started', () => {
             gameState = 'waiting';
@@ -442,26 +490,42 @@
             hasBetInRound = false;
             globalMultiplier = 1.00;
             
-            statusText.innerText = "Prepare for takeoff... (6s)";
-            statusText.style.color = "#f59e0b";
-            multiplierDisplay.style.color = "#475569";
+            multiplierDisplay.style.color = "#cbd5e1";
             multiplierDisplay.innerText = "1.00x";
             
             actionBtn.className = "btn-bet";
-            actionBtn.innerText = "INFLATE BALLOON";
+            actionBtn.innerText = "JOIN NEXT FLIGHT";
             betInput.disabled = false;
+
+            // Start Live Countdown
+            let timeLeft = 6;
+            statusText.innerText = `Boarding... Doors close in ${timeLeft}s`;
+            statusText.style.color = "#fbbf24";
+            
+            if(countdownTimer) clearInterval(countdownTimer);
+            countdownTimer = setInterval(() => {
+                timeLeft--;
+                if(timeLeft > 0) {
+                    statusText.innerText = `Boarding... Doors close in ${timeLeft}s`;
+                } else {
+                    clearInterval(countdownTimer);
+                    statusText.innerText = "Ignition...";
+                }
+            }, 1000);
         });
 
         socket.on('game_started', () => {
+            if(countdownTimer) clearInterval(countdownTimer);
+            
             gameState = 'flying';
             isInFlight = true;
-            statusText.innerText = "Balloon is rising";
-            statusText.style.color = "#10b981";
-            multiplierDisplay.style.color = "#10b981";
+            statusText.innerText = "We are airborne!";
+            statusText.style.color = "#34d399";
+            multiplierDisplay.style.color = "#34d399";
 
             if (hasBetInRound) {
                 actionBtn.className = "btn-cash";
-                actionBtn.innerText = "CASH OUT";
+                actionBtn.innerText = "COLLECT WINNINGS";
             } else {
                 actionBtn.className = "btn-disabled";
                 actionBtn.innerText = "FLIGHT IN PROGRESS";
@@ -473,32 +537,32 @@
             multiplierDisplay.innerText = data.multiplier.toFixed(2) + "x";
             
             if(globalMultiplier >= 2 && globalMultiplier < 5) {
-                multiplierDisplay.style.color = "#f59e0b";
+                multiplierDisplay.style.color = "#fbbf24";
             } else if (globalMultiplier >= 5) {
-                multiplierDisplay.style.color = "#ef4444";
+                multiplierDisplay.style.color = "#f87171";
             }
 
             if (hasBetInRound) {
                 const liveWinnings = (parseFloat(betInput.value) * data.multiplier).toFixed(2);
-                actionBtn.innerText = `CASH OUT ($${liveWinnings})`;
+                actionBtn.innerText = `COLLECT $${liveWinnings}`;
             }
         });
 
         socket.on('game_crashed', (data) => {
-            let finalSize = 45 + Math.min(globalMultiplier * 14, 120);
+            if(countdownTimer) clearInterval(countdownTimer);
             gameState = 'crashed';
             isInFlight = false;
             globalMultiplier = data.crashedAt;
             
-            triggerBurstAnimation(finalSize);
+            triggerBurstAnimation();
             
-            statusText.innerText = "Balloon burst!";
+            statusText.innerText = "Oh no, it popped!";
             statusText.style.color = "#ef4444";
             multiplierDisplay.style.color = "#ef4444";
             multiplierDisplay.innerText = data.crashedAt.toFixed(2) + "x";
             
             actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "BURST!";
+            actionBtn.innerText = "FLIGHT ENDED";
             betInput.disabled = false;
         });
 
@@ -507,7 +571,7 @@
             currentBalance = data.balance;
             balanceDisplay.innerText = currentBalance.toFixed(2);
             actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "SECURING CASH...";
+            actionBtn.innerText = "TICKET CONFIRMED!";
             betInput.disabled = true;
         });
 
@@ -516,24 +580,22 @@
             currentBalance = data.balance;
             balanceDisplay.innerText = currentBalance.toFixed(2);
             actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "EARNINGS SECURED!";
+            actionBtn.innerText = "SAFE LANDING!";
             
             triggerWinAnimation();
-            addLog(`Success! You securely collected $${data.winnings}`, true);
+            addLog(`Awesome! You safely collected $${data.winnings}`, true);
         });
 
         socket.on('ledger_update', (data) => {
-            // Translate server system text into warm friendly interactions
-            let userMsg = data.message.replace("Player placed a", "Someone added a");
-            userMsg = userMsg.replace("Player cashed out", "Someone collected");
-            userMsg = userMsg.replace("at", "at a safe");
+            let userMsg = data.message.replace("Player placed a bet of", "A player bought a ticket for");
+            userMsg = userMsg.replace("Player cashed out", "A player jumped to safety");
             addLog(userMsg);
         });
 
         socket.on('error_message', (data) => { alert(data.message); });
 
         actionBtn.addEventListener('click', () => {
-            if (!isInFlight && !hasBetInRound) {
+            if (!isInFlight && !hasBetInRound && actionBtn.className !== "btn-disabled") {
                 socket.emit('place_bet', { amount: betInput.value });
             } else if (isInFlight && hasBetInRound) {
                 socket.emit('cash_out');
