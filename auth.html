@@ -210,7 +210,13 @@
                         statusMsg.innerText = "Login failed: " + error.message;
                     } else {
                         statusMsg.style.color = '#4cd964';
-                        statusMsg.innerText = "Success! Welcome back to the Arena.";
+                        statusMsg.innerText = "Success! Taking off to the Arena...";
+                        // Redirect to the game now that a session exists.
+                        // Change "index.html" if your game file has a different name/path.
+                        setTimeout(() => {
+                            window.location.href = "index.html";
+                        }, 600);
+                        return; // keep the button disabled while we redirect
                     }
                 } else {
                     const { data, error } = await supabaseClient.auth.signUp({
@@ -219,9 +225,20 @@
                     });
                     if (error) {
                         statusMsg.innerText = "Registration failed: " + error.message;
-                    } else {
+                    } else if (data.session) {
+                        // Email confirmation is OFF in your Supabase project, so a
+                        // session was issued immediately — safe to go straight in.
                         statusMsg.style.color = '#4cd964';
-                        statusMsg.innerText = "Account created! Check your email for the verification link.";
+                        statusMsg.innerText = "Account created! Taking off to the Arena...";
+                        setTimeout(() => {
+                            window.location.href = "index.html";
+                        }, 600);
+                        return;
+                    } else {
+                        // Email confirmation is ON — no session yet, so we can't enter
+                        // the game until the user verifies their email and signs in.
+                        statusMsg.style.color = '#4cd964';
+                        statusMsg.innerText = "Account created! Check your email for the verification link, then sign in.";
                     }
                 }
             } catch (err) {
