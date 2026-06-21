@@ -31,6 +31,12 @@ let bettingPhase = true;
 // Persistent storage keyed by User ID
 let playerBalances = {}; 
 let activeBets = {}; 
+let playerNames = {};
+
+function nameFor(socketId) {
+    // Simple, anonymous, human-readable callsign — no login required.
+    return `Pilot-${socketId.slice(0, 4).toUpperCase()}`;
+}
 
 // --- BOUNCER MIDDLEWARE ---
 // Disabled for now: free/open access, no login required.
@@ -82,13 +88,24 @@ function handleCrash() {
     clearInterval(gameLoopInterval);
     isGameRunning = false;
     io.emit('game_crashed', { crashedAt: crashPoint });
+
+    // Let everyone see how many players went down with the flight.
+    const lostCount = Object.keys(activeBets).length;
+    if (lostCount > 0) {
+        io.emit('ledger_update', {
+            message: `Flight crashed at ${crashPoint.toFixed(2)}x — ${lostCount} player${lostCount > 1 ? 's' : ''} lost their stake.`,
+            type: 'crash'
+        });
+    }
+
     setTimeout(startBettingPhase, 4000);
 }
 
 // --- WEBSOCKET EVENT HANDLING ---
 io.on('connection', (socket) => {
     const userId = socket.id;
-    console.log(`User connected: ${userId}`);
+    playerNames[userId] = nameFor(userId);
+    console.log(`User connected: ${playerNames[userId]} (${userId})`);
 
     // Set default balance if player is new
     if (playerBalances[userId] === undefined) playerBalances[userId] = 1000.00;
@@ -97,7 +114,8 @@ io.on('connection', (socket) => {
         isGameRunning,
         bettingPhase,
         currentMultiplier,
-        balance: playerBalances[userId]
+        balance: playerBalances[userId],
+        yourName: playerNames[userId]
     });
 
     socket.on('place_bet', (data) => {
@@ -109,7 +127,10 @@ io.on('connection', (socket) => {
         playerBalances[userId] -= betAmount;
         activeBets[userId] = betAmount;
         socket.emit('bet_confirmed', { balance: playerBalances[userId], betAmount });
-        io.emit('ledger_update', { message: `A player placed a K${betAmount} bet.` });
+        io.emit('ledger_update', {
+            message: `${playerNames[userId]} bought a ticket for K${betAmount.toFixed(2)}.`,
+            type: 'bet'
+        });
     });
 
     socket.on('cash_out', () => {
@@ -121,10 +142,15 @@ io.on('connection', (socket) => {
         delete activeBets[userId];
 
         socket.emit('cash_out_success', { balance: playerBalances[userId], winnings });
+        io.emit('ledger_update', {
+            message: `${playerNames[userId]} cashed out at ${currentMultiplier.toFixed(2)}x and collected K${winnings.toFixed(2)}!`,
+            type: 'win'
+        });
     });
 
     socket.on('disconnect', () => {
         delete activeBets[userId];
+        delete playerNames[userId];
     });
 });
 
