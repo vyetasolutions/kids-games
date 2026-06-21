@@ -1,12 +1,26 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
 const PORT = process.env.PORT || 3000;
+
+// --- SUPABASE DATABASE CONNECTION ---
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
+let supabase;
+if (supabaseUrl && supabaseKey) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+    console.log("✅ Database link established successfully.");
+} else {
+    console.log("⚠️ Database keys missing. Running in local memory mode.");
+}
 
 // --- GAME STATE & USER LEDGER ---
 let gameLoopInterval;
@@ -41,6 +55,7 @@ function generateCrashPoint() {
   // Generates a thrilling multiplier anywhere between 10x and 100x
   return parseFloat((10.01 + (Math.random() * 89.99)).toFixed(2));
 }
+
 function startBettingPhase() {
   bettingPhase = true;
   isGameRunning = false;
