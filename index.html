@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleek Crash Game Test</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            background-color: #0b0f19;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .game-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px;
+            width: 360px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+        .status {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+        .multiplier {
+            font-size: 5rem;
+            font-weight: 800;
+            margin: 20px 0;
+            font-variant-numeric: tabular-nums;
+            transition: color 0.1s ease;
+        }
+        .live { color: #22c55e; }
+        .crashed { color: #ef4444; }
+        .waiting { color: #eab308; }
+        
+        .log-box {
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            background: rgba(0,0,0,0.2);
+            padding: 12px;
+            border-radius: 12px;
+            max-height: 80px;
+            overflow-y: auto;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-card">
+        <div id="game-status" class="status">Connecting to Engine...</div>
+        <div id="multiplier-display" class="multiplier waiting">1.00x</div>
+        <div id="event-log" class="log-box">System initialized...</div>
+    </div>
+
+    <script>
+        // 1. CONNECT TO YOUR LIVE RENDER SERVER
+        // REPLACE THIS URL WITH YOUR ACTUAL RENDER LIVE URL:
+        const SERVER_URL = "https://your-app-name.onrender.com"; 
+        
+        const socket = io(SERVER_URL);
+        
+        const statusDisplay = document.getElementById('game-status');
+        const multiplierDisplay = document.getElementById('multiplier-display');
+        const eventLog = document.getElementById('event-log');
+
+        function logEvent(text) {
+            const p = document.createElement('p');
+            p.style.margin = "4px 0";
+            p.innerText = text;
+            eventLog.appendChild(p);
+            eventLog.scrollTop = eventLog.scrollHeight;
+        }
+
+        // 2. LISTEN FOR LIVE SERVER EVENTS
+        
+        // When connection establishes successfully
+        socket.on('connect', () => {
+            statusDisplay.innerText = "Connected to Server";
+            logEvent("Established live pipeline to cloud server.");
+        });
+
+        // When a new round starts
+        socket.on('game_started', (data) => {
+            statusDisplay.innerText = "In Flight";
+            multiplierDisplay.className = "multiplier live";
+            logEvent("✈️ A new plane has departed!");
+        });
+
+        // Every 100 milliseconds, read the live stream value
+        socket.on('multiplier_tick', (data) => {
+            multiplierDisplay.innerText = data.multiplier.toFixed(2) + "x";
+        });
+
+        // When the server calculates the crash point
+        socket.on('game_crashed', (data) => {
+            statusDisplay.innerText = "Crashed";
+            multiplierDisplay.className = "multiplier crashed";
+            multiplierDisplay.innerText = data.crashedAt.toFixed(2) + "x";
+            logEvent(`💥 Crashed spectacularly at ${data.crashedAt}x`);
+        });
+
+        // Catch up on current state if joining mid-flight
+        socket.on('initial_state', (data) => {
+            if(data.isGameRunning) {
+                statusDisplay.innerText = "In Flight";
+                multiplierDisplay.className = "multiplier live";
+            } else {
+                statusDisplay.innerText = "Waiting for Next Round";
+                multiplierDisplay.className = "multiplier waiting";
+            }
+        });
+    </script>
+</body>
+</html>
