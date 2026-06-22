@@ -37,7 +37,6 @@
             .container { flex-direction: column; }
             body { padding: 20px 15px; }
             .save-progress-pill {
-                bottom: auto;
                 top: 12px;
                 right: 12px;
                 font-size: 0.68rem;
@@ -301,7 +300,7 @@
         }
         .save-progress-pill {
             position: fixed;
-            bottom: 16px;
+            top: 16px;
             right: 16px;
             z-index: 500;
             font-family: 'Inter', -apple-system, sans-serif;
@@ -315,6 +314,10 @@
             padding: 9px 16px;
             cursor: pointer;
             transition: background 0.15s ease, transform 0.12s ease;
+            box-sizing: border-box;
+            display: inline-block;
+            width: max-content;
+            height: auto;
         }
         .save-progress-pill:hover { background: rgba(251,191,36,0.14); border-color: rgba(251,191,36,0.4); }
         .save-progress-pill:active { transform: scale(0.96); }
@@ -788,10 +791,8 @@
                 <div class="balance-pill" id="balance-pill">Wallet: K<span id="balance-display">1,000.00</span></div>
             </div>
 
-            <!-- Recent Flight History Board -->
             <div class="history-strip" id="history-strip">
-                <!-- Live badges spawn here dynamically -->
-            </div>
+                </div>
 
             <div class="canvas-container">
                 <div id="multiplier-display" class="live-multiplier-overlay" style="color: #cbd5e1;">1.00x</div>
