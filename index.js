@@ -38,20 +38,65 @@ function nameFor(socketId) {
     return `Pilot-${socketId.slice(0, 4).toUpperCase()}`;
 }
 
+// In-memory cache of balances so the hot gameplay loop never waits on a
+// database round trip. The Supabase table is the source of truth across
+// restarts/devices; this cache just makes each tick fast.
+let balanceCache = {};
+
+async function loadBalance(userId) {
+    if (balanceCache[userId] !== undefined) return balanceCache[userId];
+
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('player_balances')
+                .select('balance')
+                .eq('user_id', userId)
+                .maybeSingle();
+            if (!error && data) {
+                balanceCache[userId] = parseFloat(data.balance);
+                return balanceCache[userId];
+            }
+            // New player — create their row with the starting balance.
+            await supabase.from('player_balances').insert({ user_id: userId, balance: 1000.00 });
+        } catch (e) {
+            console.error("Balance load failed, falling back to in-memory:", e.message);
+        }
+    }
+
+    balanceCache[userId] = 1000.00;
+    return balanceCache[userId];
+}
+
+function saveBalance(userId, balance) {
+    balanceCache[userId] = balance;
+    if (!supabase) return; // memory-only mode, nothing to persist
+    // Fire-and-forget: don't make the player wait on a DB write mid-flight.
+    supabase
+        .from('player_balances')
+        .upsert({ user_id: userId, balance, updated_at: new Date().toISOString() })
+        .then(({ error }) => { if (error) console.error("Balance save failed:", error.message); });
+}
+
 // --- BOUNCER MIDDLEWARE ---
-// Disabled for now: free/open access, no login required.
-// io.use(async (socket, next) => {
-//     const token = socket.handshake.auth.token;
-//     if (!token) return next(new Error("Authentication error: No session found."));
-//     try {
-//         const { data: { user }, error } = await supabase.auth.getUser(token);
-//         if (error || !user) throw new Error("Invalid token");
-//         socket.user = user;
-//         next();
-//     } catch (e) {
-//         next(new Error("Authentication failed: Access denied."));
-//     }
-// });
+// Every connection — including anonymous ones — must carry a valid Supabase
+// session token. signInAnonymously() on the frontend issues one automatically,
+// with zero forms, so this stays frictionless for the player while still
+// giving us a stable user id to track balance against.
+io.use(async (socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) return next(new Error("Authentication error: No session found."));
+    if (!supabase) return next(new Error("Server not configured for auth."));
+
+    try {
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+        if (error || !user) throw new Error("Invalid token");
+        socket.user = user; // Attach user object to socket
+        next();
+    } catch (e) {
+        next(new Error("Authentication failed: Access denied."));
+    }
+});
 
 // --- GAME CORE FUNCTIONS ---
 function generateCrashPoint() {
@@ -102,14 +147,15 @@ function handleCrash() {
 }
 
 // --- WEBSOCKET EVENT HANDLING ---
-io.on('connection', (socket) => {
-    const userId = socket.id;
-    playerNames[userId] = nameFor(userId);
-    console.log(`User connected: ${playerNames[userId]} (${userId})`);
+io.on('connection', async (socket) => {
+    const userId = socket.user.id;
+    playerNames[userId] = playerNames[userId] || nameFor(userId);
+    console.log(`User connected: ${playerNames[userId]} (${userId}, anonymous: ${!!socket.user.is_anonymous})`);
 
-    // Set default balance if player is new
-    if (playerBalances[userId] === undefined) playerBalances[userId] = 1000.00;
-  
+    if (playerBalances[userId] === undefined) {
+        playerBalances[userId] = await loadBalance(userId);
+    }
+
     socket.emit('initial_state', {
         isGameRunning,
         bettingPhase,
@@ -126,6 +172,7 @@ io.on('connection', (socket) => {
 
         playerBalances[userId] -= betAmount;
         activeBets[userId] = betAmount;
+        saveBalance(userId, playerBalances[userId]);
         socket.emit('bet_confirmed', { balance: playerBalances[userId], betAmount });
         io.emit('ledger_update', {
             message: `${playerNames[userId]} bought a ticket for K${betAmount.toFixed(2)}.`,
@@ -140,6 +187,7 @@ io.on('connection', (socket) => {
         
         playerBalances[userId] += winnings;
         delete activeBets[userId];
+        saveBalance(userId, playerBalances[userId]);
 
         socket.emit('cash_out_success', { balance: playerBalances[userId], winnings });
         io.emit('ledger_update', {
@@ -150,7 +198,9 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         delete activeBets[userId];
-        delete playerNames[userId];
+        // Balance and name stay cached by user id, so a refresh/reconnect
+        // (even from a different browser, once they've saved an account)
+        // picks up right where they left off.
     });
 });
 
