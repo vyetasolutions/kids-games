@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vyeta Kwacha Balloon Adventures</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
@@ -257,6 +258,122 @@
             padding: 10px 14px;
             border-radius: 12px;
         }
+        .quick-bet-chips {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 4px;
+        }
+        .chip {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            color: rgba(255,255,255,0.75);
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 7px 14px;
+            cursor: pointer;
+            transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+        }
+        .chip:hover { background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.4); color: #fde68a; }
+        .chip:active { transform: scale(0.93); }
+        .chip.chip-active {
+            background: linear-gradient(135deg, rgba(251,191,36,0.25), rgba(52,211,153,0.2));
+            border-color: #fbbf24;
+            color: #fde68a;
+        }
+        .save-progress-pill {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            z-index: 500;
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: rgba(255,255,255,0.7);
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            backdrop-filter: blur(10px);
+            border-radius: 999px;
+            padding: 9px 16px;
+            cursor: pointer;
+            transition: background 0.15s ease, transform 0.12s ease;
+        }
+        .save-progress-pill:hover { background: rgba(251,191,36,0.14); border-color: rgba(251,191,36,0.4); }
+        .save-progress-pill:active { transform: scale(0.96); }
+        .save-progress-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(3,4,10,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .save-progress-overlay.show { display: flex; }
+        .save-progress-modal {
+            width: 100%;
+            max-width: 360px;
+            background: rgba(20,24,38,0.9);
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(16px);
+            border-radius: 18px;
+            padding: 26px;
+            text-align: left;
+        }
+        .save-progress-modal h3 {
+            font-family: 'Sora', -apple-system, sans-serif;
+            margin: 0 0 8px;
+            color: #fff;
+            font-size: 1.15rem;
+        }
+        .save-progress-modal p {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.82rem;
+            color: rgba(255,255,255,0.55);
+            margin: 0 0 16px;
+            line-height: 1.4;
+        }
+        .save-progress-modal input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 11px 14px;
+            margin-bottom: 10px;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 0.9rem;
+            outline: none;
+        }
+        .save-progress-modal input:focus { border-color: #fbbf24; }
+        .save-progress-status {
+            min-height: 16px;
+            font-size: 0.78rem;
+            color: #ef4444;
+            margin-bottom: 8px;
+        }
+        .save-progress-modal button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.88rem;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+        #saveProgressConfirm {
+            background: linear-gradient(135deg, #fbbf24, #34d399);
+            color: #0b1220;
+        }
+        .save-progress-cancel {
+            background: transparent;
+            color: rgba(255,255,255,0.5);
+        }
         .vyeta-footer {
             margin-top: 32px;
             padding-bottom: 10px;
@@ -278,7 +395,7 @@
             justify-content: center;
             overflow: hidden;
             background: radial-gradient(ellipse 80% 60% at 50% 18%, #1e1b4b 0%, #0b1020 48%, #03040a 100%);
-            
+            cursor: pointer;
             transition: opacity 0.7s ease, visibility 0.7s ease;
         }
         .intro-screen.intro-hidden {
@@ -409,6 +526,48 @@
             letter-spacing: 2px;
             text-transform: uppercase;
             color: rgba(255,255,255,0.4);
+        }
+        .intro-progress-wrap {
+            margin-top: 22px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            opacity: 0;
+            animation: introReveal 0.6s ease forwards;
+            animation-delay: 2.5s;
+        }
+        .intro-progress {
+            width: clamp(160px, 40vw, 220px);
+            height: 4px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+        .intro-progress-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #fbbf24, #34d399);
+            transition: width 0.3s linear;
+        }
+        .intro-percent {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.68rem;
+            letter-spacing: 1.5px;
+            color: rgba(255,255,255,0.35);
+            font-weight: 600;
+        }
+        .intro-tip {
+            margin-top: 16px;
+            min-height: 16px;
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.45);
+            opacity: 0;
+            animation: introReveal 0.6s ease forwards;
+            animation-delay: 2.7s;
+            transition: opacity 0.3s ease;
         }
 
         .intro-footer {
@@ -545,27 +704,67 @@
                 <span class="intro-dot"></span><span class="intro-dot"></span><span class="intro-dot"></span>
                 <span class="intro-boarding-text">Boarding flight deck</span>
             </div>
+
+            <div class="intro-progress-wrap">
+                <div class="intro-progress"><div class="intro-progress-fill" id="introProgressFill"></div></div>
+                <div class="intro-percent" id="introPercent">0%</div>
+            </div>
+            <div class="intro-tip" id="introTip">Tip: Cash out before the balloon drifts out of sight.</div>
         </div>
 
         <div class="intro-footer">Powered by Vyeta</div>
     </div>
 
     <script>
-    (function () {
-        var intro = document.getElementById('introScreen');
-        if (!intro) return;
-        
-        function dismiss() {
-            intro.classList.add('intro-hidden');
-            setTimeout(function () { intro.remove(); }, 700);
-        }
+        (function () {
+            var intro = document.getElementById('introScreen');
+            if (!intro) return;
+            var fill = document.getElementById('introProgressFill');
+            var percentEl = document.getElementById('introPercent');
+            var tipEl = document.getElementById('introTip');
 
-        // Timer set to 7000ms (7 seconds)
-        // We removed the event listener entirely so it is no longer skippable
-        setTimeout(dismiss, 7000); 
-    })();
-</script>
+            var TOTAL_MS = 7200; // feels like a real game loading, not just a logo flash
+            var tips = [
+                "Tip: Cash out before the balloon drifts out of sight.",
+                "Tip: The longer you wait, the bigger the multiplier — and the risk.",
+                "Tip: Set a target multiplier before you take off.",
+                "Calibrating flight instruments...",
+                "Syncing live flight activity feed...",
+                "Tip: A small, certain win beats a big, missed one."
+            ];
+            var tipIndex = 0;
 
+            var startTime = Date.now();
+            var progressInterval = setInterval(function () {
+                var elapsed = Date.now() - startTime;
+                var pct = Math.min(100, Math.round((elapsed / TOTAL_MS) * 100));
+                fill.style.width = pct + '%';
+                percentEl.textContent = pct + '%';
+                if (pct >= 100) clearInterval(progressInterval);
+            }, 80);
+
+            var tipInterval = setInterval(function () {
+                tipIndex = (tipIndex + 1) % tips.length;
+                tipEl.style.opacity = 0;
+                setTimeout(function () {
+                    tipEl.textContent = tips[tipIndex];
+                    tipEl.style.opacity = 1;
+                }, 250);
+            }, 1500);
+
+            function dismiss() {
+                clearInterval(progressInterval);
+                clearInterval(tipInterval);
+                intro.classList.add('intro-hidden');
+                setTimeout(function () { intro.remove(); }, 700);
+            }
+            var autoTimer = setTimeout(dismiss, TOTAL_MS);
+            intro.addEventListener('click', function () {
+                clearTimeout(autoTimer);
+                dismiss();
+            });
+        })();
+    </script>
 
     <div class="container">
         <div class="main-stage">
@@ -591,6 +790,12 @@
             </div>
 
             <div class="controls">
+                <div class="quick-bet-chips" id="quickBetChips">
+                    <button type="button" class="chip" data-amount="50">K50</button>
+                    <button type="button" class="chip" data-amount="100">K100</button>
+                    <button type="button" class="chip" data-amount="500">K500</button>
+                    <button type="button" class="chip" data-amount="1000">K1000</button>
+                </div>
                 <div class="currency-input-wrap">
                     <span class="currency-label">K</span>
                     <input type="number" id="bet-input" value="50" min="5">
@@ -606,6 +811,20 @@
     </div>
 
     <div class="vyeta-footer">Powered by Vyeta Digital Solutions</div>
+
+    <div class="save-progress-pill" id="saveProgressPill">💾 Save my progress</div>
+
+    <div class="save-progress-overlay" id="saveProgressOverlay">
+        <div class="save-progress-modal">
+            <h3>Save your progress</h3>
+            <p>Add an email and password so your balance follows you back next time — totally optional, you can keep playing without this.</p>
+            <input type="email" id="saveEmail" placeholder="Email address">
+            <input type="password" id="savePassword" placeholder="Create a password">
+            <div class="save-progress-status" id="saveProgressStatus"></div>
+            <button id="saveProgressConfirm">Save account</button>
+            <button id="saveProgressCancel" class="save-progress-cancel">Not now</button>
+        </div>
+    </div>
 
     <script>
         // Socket connection is set up at the bottom of this script, after every
@@ -656,6 +875,45 @@
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
+
+        // Smoothly animates the wallet number instead of snapping — small detail,
+        // makes every win/loss feel like it actually landed.
+        let balanceAnimFrame = null;
+        function animateBalanceTo(newBalance) {
+            const startVal = currentBalance;
+            const startTime = performance.now();
+            const duration = 480;
+            if (balanceAnimFrame) cancelAnimationFrame(balanceAnimFrame);
+            function step(now) {
+                const t = Math.min((now - startTime) / duration, 1);
+                const eased = 1 - Math.pow(1 - t, 3);
+                const shown = startVal + (newBalance - startVal) * eased;
+                balanceDisplay.innerText = shown.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                if (t < 1) {
+                    balanceAnimFrame = requestAnimationFrame(step);
+                } else {
+                    currentBalance = newBalance;
+                }
+            }
+            balanceAnimFrame = requestAnimationFrame(step);
+        }
+
+        // Quick-bet chips — one tap to set a common stake amount.
+        const quickBetChips = document.getElementById('quickBetChips');
+        if (quickBetChips) {
+            quickBetChips.querySelectorAll('.chip').forEach((chip) => {
+                chip.addEventListener('click', () => {
+                    betInput.value = chip.dataset.amount;
+                    quickBetChips.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
+                    chip.classList.add('chip-active');
+                });
+            });
+            betInput.addEventListener('input', () => {
+                quickBetChips.querySelectorAll('.chip').forEach(c => {
+                    c.classList.toggle('chip-active', c.dataset.amount === betInput.value);
+                });
+            });
+        }
 
         function addLog(msg, isWin = false) {
             const div = document.createElement('div');
@@ -843,17 +1101,20 @@
                 centerY += (Math.random() - 0.5) * (globalMultiplier * 0.6);
             }
 
-            // BALLOON CORE DESIGN
+            // BALLOON CORE DESIGN — matches the intro splash balloon (gold/money-green
+            // gore panels + K emblem). A soft tier-color wash on top keeps the
+            // blue → amber → red risk signal readable at a glance.
             if (gameState !== 'crashed') {
                 let colorGlow = ctx.createLinearGradient(centerX - balloonSize, centerY - balloonSize, centerX + balloonSize, centerY + balloonSize);
                 if (globalMultiplier < 2) {
-                    colorGlow.addColorStop(0, '#3b82f6'); colorGlow.addColorStop(1, '#1d4ed8');
+                    colorGlow.addColorStop(0, 'rgba(59,130,246,0.40)'); colorGlow.addColorStop(1, 'rgba(29,78,216,0.40)');
                 } else if (globalMultiplier < 5) {
-                    colorGlow.addColorStop(0, '#f59e0b'); colorGlow.addColorStop(1, '#b45309');
+                    colorGlow.addColorStop(0, 'rgba(245,158,11,0.32)'); colorGlow.addColorStop(1, 'rgba(180,83,9,0.32)');
                 } else {
-                    colorGlow.addColorStop(0, '#ef4444'); colorGlow.addColorStop(1, '#b91c1c');
+                    colorGlow.addColorStop(0, 'rgba(239,68,68,0.40)'); colorGlow.addColorStop(1, 'rgba(185,28,28,0.40)');
                 }
 
+                // Ropes
                 ctx.beginPath();
                 ctx.strokeStyle = 'rgba(255,255,255,0.35)';
                 ctx.lineWidth = 1.5;
@@ -863,20 +1124,77 @@
                 ctx.lineTo(centerX + 14, centerY + balloonSize + 18);
                 ctx.stroke();
 
-                ctx.fillStyle = '#451a03';
+                // Basket
+                ctx.fillStyle = '#5c4128';
                 ctx.beginPath();
                 ctx.roundRect(centerX - 16, centerY + balloonSize + 18, 32, 22, 5);
                 ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(centerX - 16, centerY + balloonSize + 26);
+                ctx.lineTo(centerX + 16, centerY + balloonSize + 26);
+                ctx.stroke();
 
+                // Flame flicker
+                const flameFlicker = 0.85 + Math.sin(Date.now() * 0.02) * 0.15;
+                let flameGrad = ctx.createRadialGradient(centerX, centerY + balloonSize + 10, 1, centerX, centerY + balloonSize + 14, 12);
+                flameGrad.addColorStop(0, '#fff7d6');
+                flameGrad.addColorStop(0.55, '#fbbf24');
+                flameGrad.addColorStop(1, 'rgba(234,88,12,0)');
+                ctx.save();
+                ctx.globalAlpha = flameFlicker;
                 ctx.beginPath();
-                ctx.fillStyle = colorGlow;
-                ctx.arc(centerX, centerY, balloonSize, 0, Math.PI * 2);
+                ctx.ellipse(centerX, centerY + balloonSize + 10, 6, 9 * flameFlicker, 0, 0, Math.PI * 2);
+                ctx.fillStyle = flameGrad;
                 ctx.fill();
-                
+                ctx.restore();
+
+                // Canopy: gold/green gore panels, clipped to the balloon circle
+                ctx.save();
                 ctx.beginPath();
-                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                ctx.arc(centerX, centerY, balloonSize, 0, Math.PI * 2);
+                ctx.clip();
+                const stripeCount = 10;
+                const stripeW = (balloonSize * 2) / stripeCount;
+                for (let i = 0; i < stripeCount; i++) {
+                    const sx = centerX - balloonSize + i * stripeW;
+                    let goreGrad = ctx.createLinearGradient(0, centerY - balloonSize, 0, centerY + balloonSize);
+                    if (i % 2 === 0) {
+                        goreGrad.addColorStop(0, '#fde68a'); goreGrad.addColorStop(1, '#f59e0b');
+                    } else {
+                        goreGrad.addColorStop(0, '#6ee7b7'); goreGrad.addColorStop(1, '#10b981');
+                    }
+                    ctx.fillStyle = goreGrad;
+                    ctx.fillRect(sx, centerY - balloonSize, stripeW, balloonSize * 2);
+                }
+                // Tier-color wash
+                ctx.fillStyle = colorGlow;
+                ctx.fillRect(centerX - balloonSize, centerY - balloonSize, balloonSize * 2, balloonSize * 2);
+                // Sheen highlight
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(255,255,255,0.18)';
                 ctx.arc(centerX - balloonSize * 0.28, centerY - balloonSize * 0.28, balloonSize * 0.45, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.restore();
+
+                // Canopy outline
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+                ctx.lineWidth = 1.5;
+                ctx.arc(centerX, centerY, balloonSize, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // K emblem
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(11,18,32,0.85)';
+                ctx.arc(centerX, centerY - balloonSize * 0.05, balloonSize * 0.32, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#fbbf24';
+                ctx.font = `900 ${Math.max(balloonSize * 0.42, 16)}px Sora, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('K', centerX, centerY - balloonSize * 0.02);
             }
 
             // SHOCKWAVE WIN ACTION
@@ -1048,8 +1366,7 @@
 
             socket.on('bet_confirmed', (data) => {
                 hasBetInRound = true;
-                currentBalance = data.balance;
-                balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                animateBalanceTo(data.balance);
                 actionBtn.className = "btn-disabled";
                 actionBtn.innerText = "TICKET SECURED!";
                 betInput.disabled = true;
@@ -1063,8 +1380,7 @@
                 }
 
                 hasBetInRound = false;
-                currentBalance = data.balance;
-                balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                animateBalanceTo(data.balance);
                 actionBtn.className = "btn-disabled";
                 actionBtn.innerText = "CASH SECURED!";
                 
@@ -1104,34 +1420,109 @@
             });
         }
 
-        // --- CONNECT TO THE GAME SERVER ---
-        // Placed here, at the bottom, so every const/let/element reference used
-        // inside initializeGameListeners() and the socket handlers below has
-        // already been declared by the time any of this code actually runs.
-        socket = io(SERVER_URL);
+        // --- FRICTIONLESS SIGN-IN ---
+        // No login screen, no form, no friction: every visitor gets a real (but
+        // anonymous) Supabase session automatically. That session's user id is
+        // what the server uses to track balance persistently, and it's the same
+        // id every time this browser comes back (Supabase keeps it in
+        // localStorage) — so progress survives refreshes without ever asking
+        // the player to sign up first.
+        //
+        // NOTE: this requires "Allow anonymous sign-ins" to be turned ON in
+        // Supabase → Authentication → Settings. Without that toggle, signInAnonymously()
+        // will fail and the status pill will show a connection error.
+        const supabaseUrl = 'https://uccdevvfexfpxnnwtpxa.supabase.co';
+        const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_';
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-        socket.on('connect_error', (err) => {
-            console.error("Socket connect_error:", err.message);
-            statusText.innerText = "Connection failed: " + err.message;
-            statusText.style.color = "#ef4444";
-            actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "RECONNECTING...";
-        });
+        async function connectToGame() {
+            statusText.innerText = "Boarding...";
 
-        socket.on('disconnect', (reason) => {
-            console.warn("Socket disconnected:", reason);
-            statusText.innerText = "Disconnected: " + reason;
-            statusText.style.color = "#ef4444";
-            actionBtn.className = "btn-disabled";
-            actionBtn.innerText = "RECONNECTING...";
-        });
+            let { data: { session } } = await supabaseClient.auth.getSession();
 
-        socket.on('initial_state', (data) => {
-            currentBalance = data.balance;
-            balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        });
+            if (!session) {
+                const { data, error } = await supabaseClient.auth.signInAnonymously();
+                if (error) {
+                    console.error("Anonymous sign-in failed:", error.message);
+                    statusText.innerText = "Sign-in failed: " + error.message;
+                    statusText.style.color = "#ef4444";
+                    return;
+                }
+                session = data.session;
+            }
 
-        initializeGameListeners();
+            socket = io(SERVER_URL, {
+                auth: { token: session.access_token }
+            });
+
+            socket.on('connect_error', (err) => {
+                console.error("Socket connect_error:", err.message);
+                statusText.innerText = "Connection failed: " + err.message;
+                statusText.style.color = "#ef4444";
+                actionBtn.className = "btn-disabled";
+                actionBtn.innerText = "RECONNECTING...";
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.warn("Socket disconnected:", reason);
+                statusText.innerText = "Disconnected: " + reason;
+                statusText.style.color = "#ef4444";
+                actionBtn.className = "btn-disabled";
+                actionBtn.innerText = "RECONNECTING...";
+            });
+
+            socket.on('initial_state', (data) => {
+                currentBalance = data.balance;
+                balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            });
+
+            initializeGameListeners();
+        }
+
+        connectToGame();
+
+        // --- OPTIONAL: SAVE PROGRESS (upgrade anonymous session to a real account) ---
+        // Purely optional. Linking an email/password to the anonymous user keeps
+        // the SAME user id (and therefore the same balance) — nothing is lost.
+        const savePill = document.getElementById('saveProgressPill');
+        const saveOverlay = document.getElementById('saveProgressOverlay');
+        const saveEmail = document.getElementById('saveEmail');
+        const savePassword = document.getElementById('savePassword');
+        const saveStatus = document.getElementById('saveProgressStatus');
+        const saveConfirm = document.getElementById('saveProgressConfirm');
+        const saveCancel = document.getElementById('saveProgressCancel');
+
+        if (savePill) {
+            savePill.addEventListener('click', () => {
+                saveStatus.innerText = '';
+                saveOverlay.classList.add('show');
+            });
+            saveCancel.addEventListener('click', () => saveOverlay.classList.remove('show'));
+            saveOverlay.addEventListener('click', (e) => {
+                if (e.target === saveOverlay) saveOverlay.classList.remove('show');
+            });
+            saveConfirm.addEventListener('click', async () => {
+                const email = saveEmail.value.trim();
+                const password = savePassword.value;
+                if (!email || !password) {
+                    saveStatus.innerText = "Please enter both an email and a password.";
+                    return;
+                }
+                saveConfirm.disabled = true;
+                saveConfirm.innerText = "Saving...";
+                const { error } = await supabaseClient.auth.updateUser({ email, password });
+                if (error) {
+                    saveStatus.innerText = error.message;
+                    saveConfirm.disabled = false;
+                    saveConfirm.innerText = "Save account";
+                } else {
+                    saveStatus.style.color = "#34d399";
+                    saveStatus.innerText = "Check your email to confirm — your progress is safe either way.";
+                    saveConfirm.innerText = "Saved!";
+                    setTimeout(() => saveOverlay.classList.remove('show'), 1800);
+                }
+            });
+        }
     </script>
 </body>
 </html>
