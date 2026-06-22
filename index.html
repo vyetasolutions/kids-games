@@ -36,6 +36,13 @@
         @media (max-width: 768px) {
             .container { flex-direction: column; }
             body { padding: 20px 15px; }
+            .save-progress-pill {
+                bottom: auto;
+                top: 12px;
+                right: 12px;
+                font-size: 0.68rem;
+                padding: 7px 12px;
+            }
         }
 
         .main-stage {
@@ -172,8 +179,14 @@
         .controls {
             width: 100%;
             display: flex;
-            gap: 16px;
+            flex-direction: column;
+            gap: 12px;
             z-index: 10;
+        }
+        .bet-row {
+            width: 100%;
+            display: flex;
+            gap: 16px;
         }
         .currency-input-wrap {
             position: relative;
@@ -261,10 +274,12 @@
         .quick-bet-chips {
             display: flex;
             gap: 8px;
+            flex-wrap: wrap;
             justify-content: center;
             margin-bottom: 4px;
         }
         .chip {
+            flex: 0 1 auto;
             font-family: 'Inter', -apple-system, sans-serif;
             font-size: 0.78rem;
             font-weight: 700;
@@ -796,11 +811,13 @@
                     <button type="button" class="chip" data-amount="500">K500</button>
                     <button type="button" class="chip" data-amount="1000">K1000</button>
                 </div>
-                <div class="currency-input-wrap">
-                    <span class="currency-label">K</span>
-                    <input type="number" id="bet-input" value="50" min="5">
+                <div class="bet-row">
+                    <div class="currency-input-wrap">
+                        <span class="currency-label">K</span>
+                        <input type="number" id="bet-input" value="50" min="5">
+                    </div>
+                    <button id="action-btn" class="btn-disabled">PLEASE WAIT...</button>
                 </div>
-                <button id="action-btn" class="btn-disabled">PLEASE WAIT...</button>
             </div>
         </div>
 
