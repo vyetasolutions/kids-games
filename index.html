@@ -1073,25 +1073,68 @@ function wire(){
     startEngineSound();
   });
 
-  socket.on('multiplier_tick',d=>{
-    if(status!=="IN_FLIGHT") return;
-    mult=d.multiplier;
-    mt.innerText=mult.toFixed(2)+'x';
-    checkMilestones(mult);
-    if(mult>10){
-      mt.style.color='var(--red)';
-      mt.style.textShadow='0 0 30px rgba(239,68,68,0.8)';
-    } else if(mult>5){
-      mt.style.color='var(--red)';
-      mt.style.textShadow='0 0 20px rgba(239,68,68,0.5)';
-    } else if(mult>2){
-      mt.style.color='var(--amber)';
-      mt.style.textShadow='0 0 16px rgba(245,158,11,0.5)';
-    } else {
-      mt.style.color='var(--green)';
-      mt.style.textShadow='0 0 12px rgba(16,185,129,0.4)';
+socket.on('multiplier_tick', d => {
+    // ── MID-ROUND CATCH-UP ─────────────────────────────────
+    if (status !== "IN_FLIGHT") {
+      // Don't override if the round just crashed or is taking bets
+      if (status === "CRASHED" || status === "BETTING") return;
+
+      // Force state to live flight
+      status = "IN_FLIGHT";
+      sl.innerText = ''; // Clear "Boarding..." or "Connecting..." text
+      
+      // Lock the action button for spectators
+      AB.className = 'ab bdis'; 
+      AB.innerText = 'FLIGHT IN PROGRESS';
+      startEngineSound();
+
+      // Fast-forward craft position & rebuild flight path history
+      // This prevents the balloon from aggressively snapping from the origin
+      pathPoints = [];
+      const dpr = window.devicePixelRatio || 1;
+      const W = canvas.width / dpr;
+      const H = canvas.height / dpr;
+      
+      let tempCX = 100;
+      let tempCY = H * 0.62;
+      
+      // Simulate previous frames to generate the glowing trail line
+      for (let m = 1.0; m <= d.multiplier; m += 0.05) {
+        const tX = Math.min(120 + m * 18, W * 0.42);
+        tempCX += (tX - tempCX) * 0.06;
+        
+        const raw = H * 0.72 - (Math.log(m + 1) * H * 0.19);
+        const tY = Math.max(safeTop + 10, Math.min(safeBottom - 80, raw));
+        tempCY += (tY - tempCY) * 0.07;
+        
+        pathPoints.push({ x: tempCX, y: tempCY });
+      }
+      
+      // Snap craft to the final caught-up coordinates
+      cX = tempCX;
+      cY = tempCY;
     }
-    if(betState==="PLACED") AB.innerText=`CASH OUT (ZK ${(betAmt*mult).toFixed(2)})`;
+
+    // ── STANDARD LIVE TICK ─────────────────────────────────
+    mult = d.multiplier;
+    mt.innerText = mult.toFixed(2) + 'x';
+    checkMilestones(mult);
+    
+    if (mult > 10) {
+      mt.style.color = 'var(--red)';
+      mt.style.textShadow = '0 0 30px rgba(239,68,68,0.8)';
+    } else if (mult > 5) {
+      mt.style.color = 'var(--red)';
+      mt.style.textShadow = '0 0 20px rgba(239,68,68,0.5)';
+    } else if (mult > 2) {
+      mt.style.color = 'var(--amber)';
+      mt.style.textShadow = '0 0 16px rgba(245,158,11,0.5)';
+    } else {
+      mt.style.color = 'var(--green)';
+      mt.style.textShadow = '0 0 12px rgba(16,185,129,0.4)';
+    }
+    
+    if (betState === "PLACED") AB.innerText = `CASH OUT (ZK ${(betAmt * mult).toFixed(2)})`;
   });
 
   socket.on('cash_out_success',d=>{
