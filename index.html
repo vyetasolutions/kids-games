@@ -232,37 +232,125 @@
             gap: 16px;
         }
 
-        /* Vehicle Selector Styling Matrix */
-        .vehicle-matrix {
+        /* Vehicle Selector: collapses to a compact chip so it never eats into
+           the flight path above it. The full picker only appears as a floating
+           popover, on demand, and never pushes the layout. */
+        .vehicle-selector {
+            position: relative;
+            pointer-events: auto;
+        }
+
+        .vehicle-chip-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--text-main);
+        }
+
+        .vehicle-chip-btn:hover {
+            border-color: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .vehicle-chip-btn.locked {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .chip-emoji {
+            font-size: 1.4rem;
+            line-height: 1;
+        }
+
+        .chip-label-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            flex: 1;
+        }
+
+        .chip-eyebrow {
+            font-size: 0.62rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+
+        .chip-name {
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .chip-chevron {
+            color: var(--text-muted);
+            transition: transform 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .vehicle-selector.open .chip-chevron {
+            transform: rotate(180deg);
+        }
+
+        /* Floating popover — overlays above the control board, takes zero
+           permanent space, and never overlaps the canvas/flight path. */
+        .vehicle-popover {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 0;
+            right: 0;
+            background: rgba(15, 23, 42, 0.97);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 10px;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
+            gap: 8px;
+            z-index: 60;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.55);
+            opacity: 0;
+            transform: translateY(8px) scale(0.97);
+            pointer-events: none;
+            transition: opacity 0.18s ease, transform 0.18s ease;
+        }
+
+        .vehicle-popover.open {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
         }
 
         .vehicle-option {
-            background: var(--glass-bg);
+            background: rgba(255,255,255,0.03);
             border: 1px solid var(--glass-border);
             border-radius: 12px;
-            padding: 12px;
+            padding: 10px 6px;
             text-align: center;
             cursor: pointer;
-            pointer-events: auto;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .vehicle-option:hover {
             border-color: rgba(255,255,255,0.2);
-            background: rgba(255,255,255,0.03);
+            background: rgba(255,255,255,0.06);
         }
 
         .vehicle-option.active {
             border-color: var(--neon-cyan);
-            background: rgba(0, 229, 255, 0.08);
+            background: rgba(0, 229, 255, 0.1);
             box-shadow: 0 0 12px rgba(0, 229, 255, 0.15);
         }
 
         .vehicle-name {
-            font-size: 0.85rem;
+            font-size: 0.72rem;
             font-weight: 700;
             display: block;
             margin-top: 4px;
@@ -899,19 +987,30 @@
         <!-- System User Action Interactive Grid -->
         <div class="control-board">
             <div class="bet-interface-panel">
-                <!-- Vehicle Selector Interface Grid Matrix -->
-                <div class="vehicle-matrix">
-                    <div class="vehicle-option active" data-vehicle="balloon">
-                        <span style="font-size:1.5rem;">🎈</span>
-                        <span class="vehicle-name">Kwacha Balloon</span>
-                    </div>
-                    <div class="vehicle-option" data-vehicle="lwango">
-                        <span style="font-size:1.5rem;">🧺</span>
-                        <span class="vehicle-name">Traditional Lwango</span>
-                    </div>
-                    <div class="vehicle-option" data-vehicle="broom">
-                        <span style="font-size:1.5rem;">🧹</span>
-                        <span class="vehicle-name">Mystic Broomstick</span>
+                <!-- Vehicle Selector: compact chip, expands to a floating popover on tap -->
+                <div class="vehicle-selector" id="vehicle-selector">
+                    <button type="button" class="vehicle-chip-btn" id="vehicle-chip-btn">
+                        <span class="chip-emoji" id="chip-emoji">🎈</span>
+                        <span class="chip-label-group">
+                            <span class="chip-eyebrow">Craft</span>
+                            <span class="chip-name" id="chip-name">Kwacha Balloon</span>
+                        </span>
+                        <svg class="chip-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+
+                    <div class="vehicle-popover" id="vehicle-popover">
+                        <div class="vehicle-option active" data-vehicle="balloon" data-emoji="🎈" data-name="Kwacha Balloon">
+                            <span style="font-size:1.4rem;">🎈</span>
+                            <span class="vehicle-name">Kwacha Balloon</span>
+                        </div>
+                        <div class="vehicle-option" data-vehicle="lwango" data-emoji="🧺" data-name="Traditional Lwango">
+                            <span style="font-size:1.4rem;">🧺</span>
+                            <span class="vehicle-name">Traditional Lwango</span>
+                        </div>
+                        <div class="vehicle-option" data-vehicle="broom" data-emoji="🧹" data-name="Mystic Broomstick">
+                            <span style="font-size:1.4rem;">🧹</span>
+                            <span class="vehicle-name">Mystic Broomstick</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1020,14 +1119,47 @@
         }
 
         function setupInterfaceInteractions() {
-            // Vehicle Select Configuration Hooks
+            // Vehicle Selector: chip toggles a floating popover; picking an
+            // option updates the chip and closes the popover. Locked while a
+            // bet is in flight, same rule as before.
+            const vehicleSelector = document.getElementById('vehicle-selector');
+            const chipBtn = document.getElementById('vehicle-chip-btn');
+            const popover = document.getElementById('vehicle-popover');
+            const chipEmoji = document.getElementById('chip-emoji');
+            const chipName = document.getElementById('chip-name');
+
+            function isVehicleLocked() {
+                return gameStatus === "IN_FLIGHT" && clientBetState === "PLACED";
+            }
+
+            function closePopover() {
+                popover.classList.remove('open');
+                vehicleSelector.classList.remove('open');
+            }
+
+            chipBtn.addEventListener('click', () => {
+                if (isVehicleLocked()) return; // Frame-lock choices during running operations
+                const willOpen = !popover.classList.contains('open');
+                popover.classList.toggle('open', willOpen);
+                vehicleSelector.classList.toggle('open', willOpen);
+            });
+
             document.querySelectorAll('.vehicle-option').forEach(opt => {
                 opt.addEventListener('click', () => {
-                    if(gameStatus === "IN_FLIGHT" && clientBetState === "PLACED") return; // Frame-lock choices during running operations
+                    if (isVehicleLocked()) return;
                     document.querySelectorAll('.vehicle-option').forEach(o => o.classList.remove('active'));
                     opt.classList.add('active');
                     activeVehicle = opt.dataset.vehicle;
+                    chipEmoji.textContent = opt.dataset.emoji;
+                    chipName.textContent = opt.dataset.name;
+                    closePopover(); // Selector leaves the screen the moment a pick is made
                 });
+            });
+
+            // Tapping anywhere outside the selector also collapses it, so it
+            // never lingers over the flight path.
+            document.addEventListener('click', (e) => {
+                if (!vehicleSelector.contains(e.target)) closePopover();
             });
 
             // Action Primary Button Processing Trigger Framework Mapping
@@ -1085,6 +1217,9 @@
                 actionBtn.className = "action-button btn-bet";
                 actionBtn.innerText = "BUY FLIGHT TICKET";
                 betInput.removeAttribute('disabled');
+
+                const chipBtn = document.getElementById('vehicle-chip-btn');
+                if (chipBtn) chipBtn.classList.remove('locked');
             });
 
             socket.on('bet_confirmed', (data) => {
@@ -1095,6 +1230,9 @@
                 actionBtn.innerText = "TICKET SECURED!";
                 betInput.setAttribute('disabled', 'true');
                 logFlightEvent("Your craft registration has been approved.");
+
+                const chipBtn = document.getElementById('vehicle-chip-btn');
+                if (chipBtn) chipBtn.classList.add('locked');
             });
 
             socket.on('game_started', () => {
