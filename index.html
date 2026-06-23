@@ -2,12 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Vyeta Kwacha Balloon Adventures</title>
-    <!-- Google Fonts for crisp modern interface typography -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Google Fonts: Plus Jakarta Sans for the game UI, Inter/Sora for the intro splash -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
     <!-- Socket.io Client Implementation -->
-    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <!-- Supabase client: needed for anonymous auth so the server can verify a real session token -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --bg-space: #0b0f19;
@@ -37,30 +41,6 @@
             overflow: hidden;
             background-color: var(--bg-space);
             color: var(--text-main);
-        }
-
-        /* Loading Screen Overlay */
-        #intro-loader {
-            position: fixed;
-            inset: 0;
-            background: radial-gradient(circle at center, #1e1b4b 0%, var(--bg-space) 100%);
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.6s ease;
-        }
-
-        .loader-spinner {
-            width: 80px;
-            height: 80px;
-            border: 4px solid var(--glass-border);
-            border-top-color: var(--neon-cyan);
-            border-radius: 50%;
-            animation: spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-            margin-bottom: 24px;
-            box-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
         }
 
         /* Core Game Container Layout */
@@ -108,9 +88,9 @@
             gap: 8px;
             font-weight: 700;
             color: var(--neon-green);
+            transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        /* FIX: Save Progress Button constrained safely from trailing off right-side screen boundaries */
         #save-progress-btn {
             position: relative;
             display: inline-flex;
@@ -130,6 +110,7 @@
             cursor: pointer;
             transition: all 0.2s ease;
             box-sizing: border-box;
+            pointer-events: auto;
         }
 
         #save-progress-btn:hover {
@@ -183,6 +164,45 @@
             text-transform: uppercase;
             letter-spacing: 2px;
             color: var(--text-muted);
+        }
+
+        /* 🏆 Center Screen Win Celebration (ported from working build) */
+        #win-splash {
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.5);
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.85), rgba(5, 150, 105, 0.95));
+            backdrop-filter: blur(12px);
+            padding: 20px 40px;
+            border-radius: 24px;
+            border: 2px solid rgba(110, 231, 183, 0.5);
+            box-shadow: 0 20px 60px rgba(16, 185, 129, 0.4);
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 50;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #win-splash.show {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+            top: 26%;
+        }
+        .win-label {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #d1fae5;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 4px;
+        }
+        .win-amount {
+            font-size: 2.6rem;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: -1px;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
 
         /* Premium Glassmorphic Layout Control Board */
@@ -363,7 +383,7 @@
             animation: fadeIn 0.25s ease-out;
         }
 
-        /* Success Splash Toast Popups */
+        /* Success Splash Toast Popups (cash out confirmation, separate from win-splash) */
         #cashout-toast {
             position: absolute;
             top: 30%;
@@ -387,30 +407,471 @@
             transform: translate(-50%, -50%) scale(1);
         }
 
+        /* Save progress modal */
+        .save-progress-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+        }
+        .save-progress-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .save-progress-modal {
+            background: #111827;
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 28px;
+            width: min(360px, 90vw);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+        }
+        .save-progress-modal h3 {
+            margin-bottom: 8px;
+            font-size: 1.15rem;
+        }
+        .save-progress-modal p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+            line-height: 1.4;
+        }
+        .save-progress-modal input {
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: #fff;
+            font-size: 0.95rem;
+            margin-bottom: 10px;
+            outline: none;
+        }
+        .save-progress-status {
+            font-size: 0.82rem;
+            color: var(--neon-amber);
+            min-height: 16px;
+            margin-bottom: 8px;
+        }
+        .save-progress-modal button {
+            width: 100%;
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-bottom: 8px;
+        }
+        #saveProgressConfirm {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #fff;
+        }
+        #saveProgressCancel {
+            background: transparent;
+            color: var(--text-muted);
+        }
+
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ============ INTRO / SPLASH SCREEN (ported from working build, 7.2s) ============ */
+        .intro-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: radial-gradient(ellipse 80% 60% at 50% 18%, #1e1b4b 0%, #0b1020 48%, #03040a 100%);
+            cursor: pointer;
+            transition: opacity 0.7s ease, visibility 0.7s ease;
+        }
+        .intro-screen.intro-hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .intro-stars .intro-star {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: #fff;
+            border-radius: 50%;
+            opacity: 0.4;
+            animation: introStarTwinkle 2.8s ease-in-out infinite;
+        }
+        .intro-cloud {
+            position: absolute;
+            width: 240px;
+            height: 80px;
+            background: radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%);
+            border-radius: 50%;
+            filter: blur(6px);
+            will-change: transform;
+        }
+        .intro-cloud-1 { top: 16%; left: -20%; animation: introCloudDrift 16s linear infinite; }
+        .intro-cloud-2 { top: 64%; left: -30%; animation: introCloudDrift 21s linear infinite; animation-delay: 4s; }
+
+        .intro-content {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 24px;
+        }
+        .intro-eyebrow {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.7rem;
+            letter-spacing: 3px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 16px;
+            opacity: 0;
+            animation: introReveal 0.8s ease forwards;
+            animation-delay: 0.15s;
+        }
+        .balloon-wrap {
+            position: relative;
+            width: clamp(120px, 30vw, 180px);
+            margin-bottom: 4px;
+            opacity: 0;
+            animation: introBalloonRise 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+        .balloon-wrap svg {
+            width: 100%;
+            display: block;
+            animation: introBalloonBob 4.6s ease-in-out infinite;
+            animation-delay: 1.3s;
+            transform-origin: 50% 78%;
+        }
+        .balloon-glow {
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            width: 70%;
+            height: 26px;
+            transform: translateX(-50%);
+            background: radial-gradient(ellipse, rgba(251,191,36,0.35), transparent 70%);
+            filter: blur(8px);
+            border-radius: 50%;
+        }
+        .balloon-flame { animation: introFlameFlicker 0.55s ease-in-out infinite; transform-origin: 50% 100%; }
+
+        .intro-title {
+            margin: 16px 0 6px;
+            font-family: 'Sora', -apple-system, sans-serif;
+            line-height: 1.05;
+        }
+        .intro-title-line {
+            display: block;
+            opacity: 0;
+            transform: translateY(14px);
+            animation: introReveal 0.7s ease forwards;
+        }
+        .intro-title-line-1 {
+            font-size: clamp(0.95rem, 3vw, 1.25rem);
+            letter-spacing: 6px;
+            color: rgba(255,255,255,0.55);
+            font-weight: 700;
+            animation-delay: 1.5s;
+        }
+        .intro-title-line-2 {
+            font-size: clamp(2rem, 7vw, 3.3rem);
+            letter-spacing: 0.5px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fde68a, #fbbf24 45%, #34d399);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation-delay: 1.7s;
+        }
+        .intro-tagline {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.95rem;
+            color: rgba(255,255,255,0.5);
+            margin: 4px 0 26px;
+            opacity: 0;
+            animation: introReveal 0.7s ease forwards;
+            animation-delay: 1.95s;
+        }
+        .intro-boarding {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            animation: introReveal 0.6s ease forwards;
+            animation-delay: 2.2s;
+        }
+        .intro-dot { width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; animation: introDotPulse 1.2s ease-in-out infinite; }
+        .intro-dot:nth-child(2) { animation-delay: 0.15s; }
+        .intro-dot:nth-child(3) { animation-delay: 0.3s; }
+        .intro-boarding-text {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.4);
+        }
+        .intro-progress-wrap {
+            margin-top: 22px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            opacity: 0;
+            animation: introReveal 0.6s ease forwards;
+            animation-delay: 2.5s;
+        }
+        .intro-progress {
+            width: clamp(160px, 40vw, 220px);
+            height: 4px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+        .intro-progress-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #fbbf24, #34d399);
+            transition: width 0.3s linear;
+        }
+        .intro-percent {
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.68rem;
+            letter-spacing: 1.5px;
+            color: rgba(255,255,255,0.35);
+            font-weight: 600;
+        }
+        .intro-tip {
+            margin-top: 16px;
+            min-height: 16px;
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.45);
+            opacity: 0;
+            animation: introReveal 0.6s ease forwards;
+            animation-delay: 2.7s;
+            transition: opacity 0.3s ease;
+        }
+
+        .intro-footer {
+            position: absolute;
+            bottom: 28px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.7rem;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.3);
+            font-weight: 600;
+            opacity: 0;
+            animation: introReveal 0.6s ease forwards;
+            animation-delay: 2.4s;
+        }
+
+        @keyframes introBalloonRise {
+            0% { opacity: 0; transform: translateY(120px) scale(0.85); }
+            70% { opacity: 1; transform: translateY(-8px) scale(1.02); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes introBalloonBob {
+            0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+            50% { transform: translateY(-12px) rotate(1.2deg); }
+        }
+        @keyframes introFlameFlicker {
+            0%, 100% { opacity: 0.85; transform: scaleY(1); }
+            50% { opacity: 1; transform: scaleY(1.18); }
+        }
+        @keyframes introStarTwinkle { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.9; } }
+        @keyframes introCloudDrift { from { transform: translateX(0); } to { transform: translateX(160vw); } }
+        @keyframes introReveal { to { opacity: 1; transform: translateY(0); } }
+        @keyframes introDotPulse { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.7); } 40% { opacity: 1; transform: scale(1); } }
+
+        @media (prefers-reduced-motion: reduce) {
+            .balloon-wrap, .intro-title-line, .intro-tagline, .intro-boarding, .intro-footer, .intro-eyebrow {
+                animation: none !important;
+                opacity: 1 !important;
+                transform: none !important;
+            }
+            .balloon-wrap svg, .balloon-flame, .intro-dot, .intro-cloud, .intro-star {
+                animation: none !important;
+            }
+        }
     </style>
 </head>
 <body>
 
-    <!-- Loading Screen Setup Section -->
-    <div id="intro-loader">
-        <div class="loader-spinner"></div>
-        <h3 style="font-weight:700; margin-bottom:6px;">Connecting to Launch Site</h3>
-        <p style="color:var(--text-muted); font-size:0.87rem;">Assembling craft variations and checking air pressure...</p>
+    <!-- ============ INTRO / SPLASH SCREEN (7.2s, ported from the working build) ============ -->
+    <div id="introScreen" class="intro-screen" role="img" aria-label="Kwacha Balloon Arena is loading">
+        <div class="intro-stars">
+            <span class="intro-star" style="top:10%; left:14%;"></span>
+            <span class="intro-star" style="top:22%; left:78%; animation-delay:0.4s;"></span>
+            <span class="intro-star" style="top:8%; left:48%; animation-delay:0.8s;"></span>
+            <span class="intro-star" style="top:32%; left:30%; animation-delay:1.2s;"></span>
+            <span class="intro-star" style="top:15%; left:88%; animation-delay:1.6s;"></span>
+            <span class="intro-star" style="top:40%; left:8%; animation-delay:0.6s;"></span>
+            <span class="intro-star" style="top:6%; left:65%; animation-delay:1.4s;"></span>
+            <span class="intro-star" style="top:28%; left:58%; animation-delay:0.2s;"></span>
+        </div>
+        <div class="intro-cloud intro-cloud-1"></div>
+        <div class="intro-cloud intro-cloud-2"></div>
+
+        <div class="intro-content">
+            <div class="intro-eyebrow">Vyeta Digital Solutions Presents</div>
+
+            <div class="balloon-wrap">
+                <div class="balloon-glow"></div>
+                <svg viewBox="0 0 220 320" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="introGold" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#fde68a"/>
+                            <stop offset="100%" stop-color="#f59e0b"/>
+                        </linearGradient>
+                        <linearGradient id="introGreen" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#6ee7b7"/>
+                            <stop offset="100%" stop-color="#10b981"/>
+                        </linearGradient>
+                        <radialGradient id="introSheen" cx="35%" cy="18%" r="60%">
+                            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+                            <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+                        </radialGradient>
+                        <radialGradient id="introFlameGrad" cx="50%" cy="30%" r="60%">
+                            <stop offset="0%" stop-color="#fff7d6"/>
+                            <stop offset="55%" stop-color="#fbbf24"/>
+                            <stop offset="100%" stop-color="#ea580c" stop-opacity="0"/>
+                        </radialGradient>
+                        <clipPath id="introBalloonClip">
+                            <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z"/>
+                        </clipPath>
+                    </defs>
+
+                    <g clip-path="url(#introBalloonClip)">
+                        <rect x="0"   y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="22"  y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="44"  y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="66"  y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="88"  y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="110" y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="132" y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="154" y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="176" y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="198" y="0" width="22" height="240" fill="url(#introGreen)"/>
+                    </g>
+                    <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z" fill="url(#introSheen)"/>
+                    <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z" fill="none" stroke="rgba(0,0,0,0.25)" stroke-width="2"/>
+
+                    <circle cx="110" cy="120" r="26" fill="#0b1220" opacity="0.85"/>
+                    <text x="110" y="131" font-size="30" font-weight="900" fill="#fbbf24" text-anchor="middle" font-family="'Sora', sans-serif">K</text>
+
+                    <path d="M85 235 L135 235 L125 248 L95 248 Z" fill="#92400e"/>
+                    <ellipse class="balloon-flame" cx="110" cy="252" rx="10" ry="16" fill="url(#introFlameGrad)"/>
+
+                    <line x1="95" y1="248" x2="78" y2="278" stroke="#a8a29e" stroke-width="2"/>
+                    <line x1="125" y1="248" x2="142" y2="278" stroke="#a8a29e" stroke-width="2"/>
+                    <line x1="105" y1="248" x2="92" y2="278" stroke="#a8a29e" stroke-width="2"/>
+                    <line x1="115" y1="248" x2="128" y2="278" stroke="#a8a29e" stroke-width="2"/>
+
+                    <rect x="78" y="278" width="64" height="30" rx="6" fill="#7c5a3a"/>
+                    <line x1="78" y1="288" x2="142" y2="288" stroke="#5c4128" stroke-width="1.5" opacity="0.7"/>
+                    <line x1="78" y1="298" x2="142" y2="298" stroke="#5c4128" stroke-width="1.5" opacity="0.7"/>
+                </svg>
+            </div>
+
+            <h1 class="intro-title">
+                <span class="intro-title-line intro-title-line-1">KWACHA</span>
+                <span class="intro-title-line intro-title-line-2">BALLOON ARENA</span>
+            </h1>
+            <p class="intro-tagline">Fortunes rise. Know when to jump.</p>
+
+            <div class="intro-boarding">
+                <span class="intro-dot"></span><span class="intro-dot"></span><span class="intro-dot"></span>
+                <span class="intro-boarding-text">Boarding flight deck</span>
+            </div>
+
+            <div class="intro-progress-wrap">
+                <div class="intro-progress"><div class="intro-progress-fill" id="introProgressFill"></div></div>
+                <div class="intro-percent" id="introPercent">0%</div>
+            </div>
+            <div class="intro-tip" id="introTip">Tip: Cash out before the balloon drifts out of sight.</div>
+        </div>
+
+        <div class="intro-footer">Powered by Vyeta</div>
     </div>
+
+    <script>
+        (function () {
+            var intro = document.getElementById('introScreen');
+            if (!intro) return;
+            var fill = document.getElementById('introProgressFill');
+            var percentEl = document.getElementById('introPercent');
+            var tipEl = document.getElementById('introTip');
+
+            var TOTAL_MS = 7200; // feels like a real game loading, not just a logo flash
+            var tips = [
+                "Tip: Cash out before the balloon drifts out of sight.",
+                "Tip: The longer you wait, the bigger the multiplier — and the risk.",
+                "Tip: Set a target multiplier before you take off.",
+                "Calibrating flight instruments...",
+                "Syncing live flight activity feed...",
+                "Tip: A small, certain win beats a big, missed one."
+            ];
+            var tipIndex = 0;
+
+            var startTime = Date.now();
+            var progressInterval = setInterval(function () {
+                var elapsed = Date.now() - startTime;
+                var pct = Math.min(100, Math.round((elapsed / TOTAL_MS) * 100));
+                fill.style.width = pct + '%';
+                percentEl.textContent = pct + '%';
+                if (pct >= 100) clearInterval(progressInterval);
+            }, 80);
+
+            var tipInterval = setInterval(function () {
+                tipIndex = (tipIndex + 1) % tips.length;
+                tipEl.style.opacity = 0;
+                setTimeout(function () {
+                    tipEl.textContent = tips[tipIndex];
+                    tipEl.style.opacity = 1;
+                }, 250);
+            }, 1500);
+
+            function dismiss() {
+                clearInterval(progressInterval);
+                clearInterval(tipInterval);
+                intro.classList.add('intro-hidden');
+                setTimeout(function () { intro.remove(); }, 700);
+            }
+            var autoTimer = setTimeout(dismiss, TOTAL_MS);
+            intro.addEventListener('click', function () {
+                clearTimeout(autoTimer);
+                dismiss();
+            });
+        })();
+    </script>
 
     <!-- Main Live Game Layout Display -->
     <div id="game-viewport">
-        
+
         <header>
             <div class="brand-logo">KWACHA BALLOON ADVENTURES</div>
             <div class="header-actions">
-                <div class="wallet-pill">
+                <div class="wallet-pill" id="balance-pill">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h4v-6Z"/></svg>
                     <span id="balance-display">ZK 0.00</span>
                 </div>
-                <!-- Fixed width max-content block execution wrapper -->
                 <button id="save-progress-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                     Save Progress
@@ -425,8 +886,14 @@
         <div class="hud-overlay">
             <div class="live-multiplier-display">
                 <div id="multiplier-text">1.00x</div>
-                <div id="game-status-label">Accepting Flight Tickets</div>
+                <div id="game-status-label">Connecting...</div>
             </div>
+        </div>
+
+        <!-- Win splash, ported from the working build's celebration popup -->
+        <div id="win-splash">
+            <div class="win-label">Cash Secured</div>
+            <div id="win-splash-amount" class="win-amount">+ ZK 0.00</div>
         </div>
 
         <!-- System User Action Interactive Grid -->
@@ -453,7 +920,7 @@
                         <span>ZK</span>
                         <input type="number" id="bet-input" class="bet-input-field" value="10" min="1" max="10000" step="1">
                     </div>
-                    <button id="action-btn" class="action-button btn-bet">BUY FLIGHT TICKET</button>
+                    <button id="action-btn" class="action-button btn-disabled">CONNECTING...</button>
                 </div>
             </div>
 
@@ -466,21 +933,34 @@
         </div>
     </div>
 
-    <!-- Win Splash Toast Component -->
+    <!-- Cash out confirmation toast -->
     <div id="cashout-toast">
         <h2 style="font-size:1.8rem; font-weight:800; margin-bottom:4px;">FLIGHT SECURED!</h2>
         <p id="toast-payout-details" style="font-size:1.1rem; font-weight:600; opacity:0.95;">You earned ZK 0.00</p>
+    </div>
+
+    <!-- Save progress modal -->
+    <div class="save-progress-overlay" id="saveProgressOverlay">
+        <div class="save-progress-modal">
+            <h3>Save your progress</h3>
+            <p>Add an email and password so your balance follows you back next time — totally optional, you can keep playing without this.</p>
+            <input type="email" id="saveEmail" placeholder="Email address">
+            <input type="password" id="savePassword" placeholder="Create a password">
+            <div class="save-progress-status" id="saveProgressStatus"></div>
+            <button id="saveProgressConfirm">Save account</button>
+            <button id="saveProgressCancel" class="save-progress-cancel">Not now</button>
+        </div>
     </div>
 
     <!-- Frontend Core Operational Physics Execution Script -->
     <script>
         const SERVER_URL = "https://kids-games-o79b.onrender.com";
         let socket;
-        
+
         // State Machine Cache Mapping
         let currentBalance = 0;
         let currentMultiplier = 1.00;
-        let gameStatus = "BETTING"; // BETTING, IN_FLIGHT, CRASHED
+        let gameStatus = "CONNECTING"; // CONNECTING, BETTING, IN_FLIGHT, CRASHED
         let activeVehicle = "balloon";
         let clientBetState = "NONE"; // NONE, PLACED, CASHED_OUT
         let currentBetAmount = 0;
@@ -502,22 +982,19 @@
         const balanceDisplay = document.getElementById('balance-display');
         const ledgerStream = document.getElementById('ledger-stream');
 
-        // Clean user handling initialization 
+        // Clean user handling initialization
         window.addEventListener('DOMContentLoaded', () => {
             initCanvasResolution();
             generateStarfieldGrid();
-            connectGameSessionWebsockets();
             setupInterfaceInteractions();
+            setupSaveProgressModal();
             window.addEventListener('resize', initCanvasResolution);
-            
-            // Artificial initialization safety loop delay to present highly-polished environment spin configuration load setups
-            setTimeout(() => {
-                document.getElementById('intro-loader').style.opacity = 0;
-                setTimeout(() => document.getElementById('intro-loader').remove(), 600);
-            }, 2500);
 
             // Execute high performance requestAnimationFrame loop tracker mapping configuration
             requestAnimationFrame(renderCorePhysicsArenaFrame);
+
+            // Kick off real auth + socket connection
+            connectToGame();
         });
 
         function initCanvasResolution() {
@@ -569,24 +1046,33 @@
             });
         }
 
-        function connectGameSessionWebsockets() {
-            // Check for persistent token architecture mock parameters
-            let localToken = localStorage.getItem('vyeta_kwacha_token');
-            if(!localToken) {
-                localToken = "anon_" + Math.random().toString(36).substring(2, 15);
-                localStorage.setItem('vyeta_kwacha_token', localToken);
-            }
-
-            socket = io(SERVER_URL, {
-                auth: { token: localToken },
-                transports: ['websocket']
-            });
-
+        function wireUpSocketListeners() {
             socket.on('initial_state', (data) => {
                 currentBalance = data.balance;
                 updateBalanceInterfaceElement();
                 logFlightEvent("Systems Online. Ready for departure calculations.");
             });
+
+            socket.on('connect_error', (err) => {
+                console.error("Socket connect_error:", err.message);
+                gameStatus = "CONNECTING";
+                statusLabel.innerText = "Connection failed: " + err.message;
+                actionBtn.className = "action-button btn-disabled";
+                actionBtn.innerText = "RECONNECTING...";
+                betInput.setAttribute('disabled', 'true');
+                logFlightEvent("Connection error: " + err.message);
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.warn("Socket disconnected:", reason);
+                gameStatus = "CONNECTING";
+                statusLabel.innerText = "Disconnected: " + reason;
+                actionBtn.className = "action-button btn-disabled";
+                actionBtn.innerText = "RECONNECTING...";
+                betInput.setAttribute('disabled', 'true');
+            });
+
+            socket.on('error_message', (data) => { alert(data.message); });
 
             socket.on('betting_phase_started', (data) => {
                 gameStatus = "BETTING";
@@ -595,7 +1081,7 @@
                 multiplierText.innerText = "1.00x";
                 multiplierText.style.color = "var(--text-main)";
                 statusLabel.innerText = "Accepting Flight Tickets";
-                
+
                 actionBtn.className = "action-button btn-bet";
                 actionBtn.innerText = "BUY FLIGHT TICKET";
                 betInput.removeAttribute('disabled');
@@ -603,7 +1089,7 @@
 
             socket.on('bet_confirmed', (data) => {
                 clientBetState = "PLACED";
-                currentBalance = data.newBalance;
+                currentBalance = data.newBalance !== undefined ? data.newBalance : data.balance;
                 updateBalanceInterfaceElement();
                 actionBtn.className = "action-button btn-disabled";
                 actionBtn.innerText = "TICKET SECURED!";
@@ -617,6 +1103,9 @@
                 if(clientBetState === "PLACED") {
                     actionBtn.className = "action-button btn-cashout";
                     actionBtn.innerText = `CASH OUT (ZK ${(currentBetAmount * 1.00).toFixed(2)})`;
+                } else {
+                    actionBtn.className = "action-button btn-disabled";
+                    actionBtn.innerText = "FLIGHT IN PROGRESS";
                 }
                 logFlightEvent("Lift-off achieved. Good luck pilots!");
             });
@@ -625,10 +1114,11 @@
                 if(gameStatus !== "IN_FLIGHT") return;
                 currentMultiplier = data.multiplier;
                 multiplierText.innerText = currentMultiplier.toFixed(2) + "x";
-                
+
                 // Color scaling dynamically shift over standard flight intervals
                 if(currentMultiplier > 5.0) multiplierText.style.color = "var(--neon-red)";
                 else if(currentMultiplier > 2.0) multiplierText.style.color = "var(--neon-amber)";
+                else multiplierText.style.color = "var(--neon-green)";
 
                 if(clientBetState === "PLACED") {
                     actionBtn.innerText = `CASH OUT (ZK ${(currentBetAmount * currentMultiplier).toFixed(2)})`;
@@ -637,19 +1127,28 @@
 
             socket.on('cash_out_success', (data) => {
                 clientBetState = "CASHED_OUT";
-                currentBalance = data.newBalance;
+                currentBalance = data.newBalance !== undefined ? data.newBalance : data.balance;
                 updateBalanceInterfaceElement();
-                
+
                 actionBtn.className = "action-button btn-disabled";
                 actionBtn.innerText = "EARNINGS SECURED";
-                
+
+                const payout = data.payout !== undefined ? data.payout : data.winnings;
                 const toast = document.getElementById('cashout-toast');
-                document.getElementById('toast-payout-details').innerText = `You earned ZK ${data.payout.toFixed(2)}`;
+                document.getElementById('toast-payout-details').innerText = `You earned ZK ${payout.toFixed(2)}`;
                 toast.classList.add('visible');
                 setTimeout(() => toast.classList.remove('visible'), 2500);
-                
+
+                // 🏆 Center screen win splash
+                const winSplash = document.getElementById('win-splash');
+                const winSplashAmount = document.getElementById('win-splash-amount');
+                winSplashAmount.innerText = `+ ZK ${payout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                winSplash.classList.add('show');
+                setTimeout(() => winSplash.classList.remove('show'), 2500);
+
                 if (navigator.vibrate) navigator.vibrate([40, 50, 40]);
-                logFlightEvent(`You safely touched down at ${data.atMultiplier.toFixed(2)}x`);
+                const atMult = data.atMultiplier !== undefined ? data.atMultiplier : currentMultiplier;
+                logFlightEvent(`You safely touched down at ${atMult.toFixed(2)}x`);
             });
 
             socket.on('game_crashed', (data) => {
@@ -657,18 +1156,23 @@
                 statusLabel.innerText = "FLIGHT TERMINATED";
                 multiplierText.innerText = "CRASHED @" + data.crashedAt.toFixed(2) + "x";
                 multiplierText.style.color = "var(--neon-red)";
-                
+
                 actionBtn.className = "action-button btn-disabled";
                 actionBtn.innerText = "CRAFT DOWN";
                 betInput.setAttribute('disabled', 'true');
-                
+
                 // Spawn dramatic explosion burst at current point calculations
                 triggerExplosionBurst(craftX, craftY);
                 logFlightEvent(`Craft lost signal at ${data.crashedAt.toFixed(2)}x`);
             });
 
-            socket.on('ledger_update', (msg) => {
-                logFlightEvent(msg);
+            socket.on('ledger_update', (data) => {
+                // Server may send either a plain string or { message, type }
+                if (typeof data === 'string') {
+                    logFlightEvent(data);
+                } else if (data && data.message) {
+                    logFlightEvent(data.message);
+                }
             });
         }
 
@@ -703,10 +1207,10 @@
         function renderCorePhysicsArenaFrame() {
             const w = canvas.width / (window.devicePixelRatio || 1);
             const h = canvas.height / (window.devicePixelRatio || 1);
-            
+
             // Clean space atmosphere redraw loop
             ctx.clearRect(0, 0, w, h);
-            
+
             // Ambient Sky Speed Shifting Base Coordinates Gradient
             let skyGrad = ctx.createLinearGradient(0, 0, 0, h);
             if (gameStatus === "IN_FLIGHT") {
@@ -785,7 +1289,7 @@
                 ctx.save();
                 ctx.shadowBlur = 25;
                 ctx.shadowColor = 'rgba(0, 229, 255, 0.4)';
-                
+
                 if (activeVehicle === "balloon") {
                     drawKwachaBalloonVector(craftX, craftY);
                 } else if (activeVehicle === "lwango") {
@@ -793,7 +1297,7 @@
                 } else if (activeVehicle === "broom") {
                     drawBroomstickVector(craftX, craftY);
                 }
-                
+
                 ctx.restore();
             }
 
@@ -802,7 +1306,6 @@
 
         // High fidelity procedural asset layout vectors rendering system blocks
         function drawKwachaBalloonVector(x, y) {
-            // Envelope Balloon Shape
             let grad = ctx.createRadialGradient(x, y-25, 5, x, y-25, 30);
             grad.addColorStop(0, '#f43f5e');
             grad.addColorStop(1, '#be123c');
@@ -811,7 +1314,6 @@
             ctx.arc(x, y - 25, 28, 0, Math.PI * 2);
             ctx.fill();
 
-            // Burner flame element tracking indicators
             if (gameStatus === "IN_FLIGHT" && Math.random() > 0.2) {
                 ctx.fillStyle = 'rgba(245, 158, 11, 0.9)';
                 ctx.beginPath();
@@ -820,7 +1322,6 @@
                 ctx.fill();
             }
 
-            // Rigging lines strings structures
             ctx.strokeStyle = '#94a3b8';
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -828,31 +1329,26 @@
             ctx.moveTo(x + 12, y - 10); ctx.lineTo(x + 8, y + 8);
             ctx.stroke();
 
-            // Passenger Basket Base Box Container Model
             ctx.fillStyle = '#78350f';
             ctx.fillRect(x - 10, y + 8, 20, 14);
-            
-            // Human Pilot Silhouette Representation Inside Basket
+
             ctx.fillStyle = '#e2e8f0';
             ctx.beginPath();
-            ctx.arc(x, y + 4, 4, 0, Math.PI*2); // Head
+            ctx.arc(x, y + 4, 4, 0, Math.PI*2);
             ctx.fill();
         }
 
         function drawLwangoBasketVector(x, y) {
-            // Draw Traditional Zambian Woven Winnowing Basket Side Profile View
             ctx.strokeStyle = '#d97706';
             ctx.lineWidth = 3;
             ctx.fillStyle = '#b45309';
-            
+
             ctx.beginPath();
-            // Shallow woven bowl arc calculation
             ctx.arc(x, y, 26, 0, Math.PI, false);
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
 
-            // Native Cross Pattern Weaving Accent Texture Lines Overlay lines
             ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
@@ -860,19 +1356,16 @@
             ctx.moveTo(x - 12, y + 18); ctx.lineTo(x + 12, y + 18);
             ctx.stroke();
 
-            // Human Passenger Sitting Securely Inside the Lwango Unit Box
             ctx.fillStyle = '#f1f5f9';
             ctx.beginPath();
-            ctx.arc(x, y - 6, 5, 0, Math.PI * 2); // Head component
+            ctx.arc(x, y - 6, 5, 0, Math.PI * 2);
             ctx.fill();
-            
-            // Body torso structure torso leaning forward gracefully inside the vessel flight line
+
             ctx.fillStyle = '#cbd5e1';
             ctx.fillRect(x - 4, y - 1, 9, 10);
         }
 
         function drawBroomstickVector(x, y) {
-            // Broomstick long primary handle bar shaft array vector tracking coordinate
             ctx.strokeStyle = '#854d0e';
             ctx.lineWidth = 4;
             ctx.lineCap = 'round';
@@ -881,7 +1374,6 @@
             ctx.lineTo(x + 28, y - 6);
             ctx.stroke();
 
-            // Bristle sweeping tail bundle arrays back left profile element boundaries
             ctx.fillStyle = '#ca8a04';
             ctx.beginPath();
             ctx.moveTo(x - 30, y + 8);
@@ -890,7 +1382,6 @@
             ctx.closePath();
             ctx.fill();
 
-            // Binding rope bands lines wrap markers
             ctx.strokeStyle = '#ef4444';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -898,13 +1389,11 @@
             ctx.lineTo(x - 31, y + 10);
             ctx.stroke();
 
-            // Active Rider Leaning Low Over Shaft Straddling Stick System Map Coordinates
             ctx.fillStyle = '#f8fafc';
             ctx.beginPath();
-            ctx.arc(x + 4, y - 8, 5, 0, Math.PI * 2); // Rider Head Unit
+            ctx.arc(x + 4, y - 8, 5, 0, Math.PI * 2);
             ctx.fill();
 
-            // Curved body suit outline structure leaning aggressively into high speed slipstream aerodynamics
             ctx.fillStyle = '#38bdf8';
             ctx.beginPath();
             ctx.moveTo(x - 6, y + 2);
@@ -913,6 +1402,88 @@
             ctx.lineTo(x - 2, y + 6);
             ctx.closePath();
             ctx.fill();
+        }
+
+        // --- FRICTIONLESS SIGN-IN ---
+        // Every visitor gets a real (but anonymous) Supabase session automatically.
+        // That session's user id is what the server uses to track balance persistently,
+        // and it's the same id every time this browser comes back (Supabase keeps it
+        // in localStorage) — so progress survives refreshes without ever asking the
+        // player to sign up first. This is the piece that was missing before: the
+        // previous version sent a made-up local string as the auth token, which is
+        // not a valid Supabase JWT, so the server rejected every connection with
+        // "Authentication failed: Access denied".
+        //
+        // NOTE: this requires "Allow anonymous sign-ins" to be turned ON in
+        // Supabase → Authentication → Settings. Without that toggle, signInAnonymously()
+        // will fail and the status label will show a sign-in error.
+        const supabaseUrl = 'https://uccdevvfexfpxnnwtpxa.supabase.co';
+        const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_';
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
+        async function connectToGame() {
+            statusLabel.innerText = "Boarding...";
+
+            let { data: { session } } = await supabaseClient.auth.getSession();
+
+            if (!session) {
+                const { data, error } = await supabaseClient.auth.signInAnonymously();
+                if (error) {
+                    console.error("Anonymous sign-in failed:", error.message);
+                    statusLabel.innerText = "Sign-in failed: " + error.message;
+                    return;
+                }
+                session = data.session;
+            }
+
+            socket = io(SERVER_URL, {
+                auth: { token: session.access_token }
+            });
+
+            wireUpSocketListeners();
+        }
+
+        // --- OPTIONAL: SAVE PROGRESS (upgrade anonymous session to a real account) ---
+        function setupSaveProgressModal() {
+            const savePill = document.getElementById('save-progress-btn');
+            const saveOverlay = document.getElementById('saveProgressOverlay');
+            const saveEmail = document.getElementById('saveEmail');
+            const savePassword = document.getElementById('savePassword');
+            const saveStatus = document.getElementById('saveProgressStatus');
+            const saveConfirm = document.getElementById('saveProgressConfirm');
+            const saveCancel = document.getElementById('saveProgressCancel');
+
+            if (!savePill) return;
+
+            savePill.addEventListener('click', () => {
+                saveStatus.innerText = '';
+                saveOverlay.classList.add('show');
+            });
+            saveCancel.addEventListener('click', () => saveOverlay.classList.remove('show'));
+            saveOverlay.addEventListener('click', (e) => {
+                if (e.target === saveOverlay) saveOverlay.classList.remove('show');
+            });
+            saveConfirm.addEventListener('click', async () => {
+                const email = saveEmail.value.trim();
+                const password = savePassword.value;
+                if (!email || !password) {
+                    saveStatus.innerText = "Please enter both an email and a password.";
+                    return;
+                }
+                saveConfirm.disabled = true;
+                saveConfirm.innerText = "Saving...";
+                const { error } = await supabaseClient.auth.updateUser({ email, password });
+                if (error) {
+                    saveStatus.innerText = error.message;
+                    saveConfirm.disabled = false;
+                    saveConfirm.innerText = "Save account";
+                } else {
+                    saveStatus.style.color = "#34d399";
+                    saveStatus.innerText = "Check your email to confirm — your progress is safe either way.";
+                    saveConfirm.innerText = "Saved!";
+                    setTimeout(() => saveOverlay.classList.remove('show'), 1800);
+                }
+            });
         }
     </script>
 </body>
