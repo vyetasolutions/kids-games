@@ -1018,48 +1018,11 @@ function log(txt){
 }
 
 // ── SOCKET LISTENERS ──────────────────────────────
-socket.on('initial_state', (data) => {
-                // 1. Sync Wallet Balance
-                currentBalance = data.balance;
-                if (balanceDisplay) balanceDisplay.innerText = currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                
-                // 2. Catch Up to Mid-Flight Action
-                if (data.isGameRunning) {
-                    gameState = 'flying';
-                    isInFlight = true;
-                    globalMultiplier = data.currentMultiplier;
-                    
-                    // Update HUD Visuals
-                    if (statusText) {
-                        statusText.innerText = "Flight in progress...";
-                        statusText.style.color = "#34d399";
-                    }
-                    if (multiplierDisplay) {
-                        multiplierDisplay.innerText = globalMultiplier.toFixed(2) + "x";
-                        multiplierDisplay.style.color = "#34d399";
-                        if(globalMultiplier >= 2 && globalMultiplier < 5) multiplierDisplay.style.color = "#fbbf24";
-                        else if (globalMultiplier >= 5) multiplierDisplay.style.color = "#f87171";
-                    }
-                    
-                    // Lock Controls for late joiners
-                    if (actionBtn) {
-                        actionBtn.className = "btn-disabled";
-                        actionBtn.innerText = "WAIT FOR NEXT ROUND";
-                    }
-                    if (betInput) betInput.disabled = true;
-                    
-                } else if (data.bettingPhase) {
-                    // 3. Catch Up to Betting Phase
-                    gameState = 'waiting';
-                    isInFlight = false;
-                    
-                    if (actionBtn) {
-                        actionBtn.className = "btn-bet";
-                        actionBtn.innerText = "BUY FLIGHT TICKET";
-                    }
-                    if (betInput) betInput.disabled = false;
-                }
-            });
+function wire(){
+  socket.on('initial_state',d=>{
+    balance=d.balance; setBalance();
+    log('Systems online. Ready for departure.');
+  });
   socket.on('connect_error',e=>{
     status="CONNECTING"; sl.innerText='Connection failed';
     AB.className='ab bdis'; AB.innerText='RECONNECTING...';
