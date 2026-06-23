@@ -4,13 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Vyeta Kwacha Balloon Adventures</title>
-    <!-- Google Fonts: Plus Jakarta Sans for the game UI, Inter/Sora for the intro splash -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-    <!-- Socket.io Client Implementation -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <!-- Supabase client: needed for anonymous auth so the server can verify a real session token -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -43,7 +40,6 @@
             color: var(--text-main);
         }
 
-        /* Core Game Container Layout */
         #game-viewport {
             position: relative;
             width: 100vw;
@@ -52,7 +48,6 @@
             grid-template-rows: auto 1fr auto;
         }
 
-        /* Top Bar & FIXED Progress Button Layout */
         header {
             display: flex;
             justify-content: space-between;
@@ -71,24 +66,37 @@
             -webkit-text-fill-color: transparent;
         }
 
+        /* Shrink brand logo on mobile so header doesn't overflow */
+        @media (max-width: 480px) {
+            .brand-logo { font-size: 0.85rem; letter-spacing: -0.3px; }
+            header { padding: 12px 12px; }
+        }
+
         .header-actions {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 10px;
+            flex-shrink: 0;
         }
 
         .wallet-pill {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             backdrop-filter: blur(12px);
-            padding: 8px 16px;
+            padding: 8px 14px;
             border-radius: 99px;
             display: flex;
             align-items: center;
             gap: 8px;
             font-weight: 700;
             color: var(--neon-green);
-            transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            white-space: nowrap;
+        }
+
+        /* Hide wallet icon on very small screens to save space */
+        @media (max-width: 380px) {
+            .wallet-pill svg { display: none; }
+            .wallet-pill { padding: 8px 10px; }
         }
 
         #save-progress-btn {
@@ -96,21 +104,24 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            width: max-content;
-            max-width: 100%;
+            gap: 6px;
             white-space: nowrap;
             background: rgba(0, 229, 255, 0.1);
             border: 1px solid rgba(0, 229, 255, 0.3);
             color: var(--neon-cyan);
-            padding: 8px 16px;
+            padding: 8px 14px;
             border-radius: 99px;
             font-weight: 600;
             font-size: 0.875rem;
             cursor: pointer;
             transition: all 0.2s ease;
             box-sizing: border-box;
-            pointer-events: auto;
+        }
+
+        /* Collapse Save button to icon-only on mobile */
+        @media (max-width: 480px) {
+            #save-progress-btn .save-btn-label { display: none; }
+            #save-progress-btn { padding: 8px 10px; }
         }
 
         #save-progress-btn:hover {
@@ -118,7 +129,6 @@
             box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
         }
 
-        /* Canvas Arena Window */
         .canvas-container {
             position: absolute;
             inset: 0;
@@ -131,7 +141,8 @@
             display: block;
         }
 
-        /* Heads Up Display (HUD) Overlays */
+        /* ── HUD: push multiplier display to the UPPER portion of the canvas
+           so the craft (which starts at ~65% height) is never hidden beneath it ── */
         .hud-overlay {
             position: absolute;
             inset: 0;
@@ -139,14 +150,14 @@
             z-index: 2;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            padding: 80px 24px 24px 24px;
+            align-items: center;
+            /* Position content in upper quarter of the screen */
+            justify-content: flex-start;
+            padding-top: 90px;
         }
 
         .live-multiplier-display {
-            align-self: center;
             text-align: center;
-            margin-top: 40px;
         }
 
         #multiplier-text {
@@ -158,15 +169,61 @@
             transition: color 0.1s ease;
         }
 
+        /* Status label: only shown when NOT in-flight (countdown, crashed, connecting) */
         #game-status-label {
             font-size: 1rem;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 2px;
             color: var(--text-muted);
+            min-height: 1.4em; /* keeps layout stable when empty */
         }
 
-        /* 🏆 Center Screen Win Celebration (ported from working build) */
+        /* Countdown ring displayed during betting phase */
+        #countdown-display {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            margin-top: 8px;
+        }
+        #countdown-display.visible {
+            display: flex;
+        }
+        #countdown-ring-svg {
+            width: 56px;
+            height: 56px;
+            transform: rotate(-90deg);
+        }
+        #countdown-ring-track {
+            fill: none;
+            stroke: rgba(255,255,255,0.08);
+            stroke-width: 4;
+        }
+        #countdown-ring-fill {
+            fill: none;
+            stroke: var(--neon-cyan);
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-dasharray: 138.23; /* 2π × r(22) */
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset 1s linear, stroke 0.3s ease;
+        }
+        #countdown-number {
+            position: absolute;
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: var(--neon-cyan);
+            /* centred over the SVG */
+        }
+        .countdown-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Win celebration */
         #win-splash {
             position: absolute;
             top: 30%;
@@ -189,52 +246,39 @@
             opacity: 1;
             top: 26%;
         }
-        .win-label {
-            font-size: 0.95rem;
-            font-weight: 800;
-            color: #d1fae5;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            margin-bottom: 4px;
-        }
-        .win-amount {
-            font-size: 2.6rem;
-            font-weight: 900;
-            color: #ffffff;
-            letter-spacing: -1px;
-            text-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
+        .win-label { font-size: 0.95rem; font-weight: 800; color: #d1fae5; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 4px; }
+        .win-amount { font-size: 2.6rem; font-weight: 900; color: #ffffff; letter-spacing: -1px; text-shadow: 0 4px 15px rgba(0,0,0,0.3); }
 
-        /* Premium Glassmorphic Layout Control Board */
+        /* ── Control board: single column on mobile, two columns on wider ── */
         .control-board {
             grid-row: 3;
             z-index: 10;
-            padding: 24px;
+            padding: 16px;
             background: linear-gradient(to top, rgba(11, 15, 25, 0.95), rgba(11, 15, 25, 0.7));
             border-top: 1px solid var(--glass-border);
             backdrop-filter: blur(20px);
+            /* Use minmax so nothing ever clips off-screen */
             display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 24px;
+            grid-template-columns: 1fr minmax(0, 300px);
+            gap: 16px;
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 640px) {
             .control-board {
                 grid-template-columns: 1fr;
-                padding: 16px;
+                gap: 10px;
+                padding: 12px;
             }
-            #multiplier-text { font-size: 3.75rem; }
+            #multiplier-text { font-size: 3.5rem; }
         }
 
         .bet-interface-panel {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 12px;
+            min-width: 0; /* prevent flex children from overflowing */
         }
 
-        /* Vehicle Selector: collapses to a compact chip so it never eats into
-           the flight path above it. The full picker only appears as a floating
-           popover, on demand, and never pushes the layout. */
         .vehicle-selector {
             position: relative;
             pointer-events: auto;
@@ -254,53 +298,16 @@
             color: var(--text-main);
         }
 
-        .vehicle-chip-btn:hover {
-            border-color: rgba(255,255,255,0.2);
-            background: rgba(255,255,255,0.05);
-        }
+        .vehicle-chip-btn:hover { border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); }
+        .vehicle-chip-btn.locked { cursor: not-allowed; opacity: 0.6; }
 
-        .vehicle-chip-btn.locked {
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
+        .chip-emoji { font-size: 1.4rem; line-height: 1; }
+        .chip-label-group { display: flex; flex-direction: column; align-items: flex-start; flex: 1; min-width: 0; }
+        .chip-eyebrow { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-weight: 700; }
+        .chip-name { font-size: 0.9rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chip-chevron { color: var(--text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
+        .vehicle-selector.open .chip-chevron { transform: rotate(180deg); }
 
-        .chip-emoji {
-            font-size: 1.4rem;
-            line-height: 1;
-        }
-
-        .chip-label-group {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            flex: 1;
-        }
-
-        .chip-eyebrow {
-            font-size: 0.62rem;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: var(--text-muted);
-            font-weight: 700;
-        }
-
-        .chip-name {
-            font-size: 0.9rem;
-            font-weight: 700;
-        }
-
-        .chip-chevron {
-            color: var(--text-muted);
-            transition: transform 0.2s ease;
-            flex-shrink: 0;
-        }
-
-        .vehicle-selector.open .chip-chevron {
-            transform: rotate(180deg);
-        }
-
-        /* Floating popover — overlays above the control board, takes zero
-           permanent space, and never overlaps the canvas/flight path. */
         .vehicle-popover {
             position: absolute;
             bottom: calc(100% + 10px);
@@ -322,11 +329,7 @@
             transition: opacity 0.18s ease, transform 0.18s ease;
         }
 
-        .vehicle-popover.open {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-            pointer-events: auto;
-        }
+        .vehicle-popover.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
 
         .vehicle-option {
             background: rgba(255,255,255,0.03);
@@ -337,141 +340,89 @@
             cursor: pointer;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        .vehicle-option:hover { border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.06); }
+        .vehicle-option.active { border-color: var(--neon-cyan); background: rgba(0, 229, 255, 0.1); box-shadow: 0 0 12px rgba(0, 229, 255, 0.15); }
+        .vehicle-name { font-size: 0.72rem; font-weight: 700; display: block; margin-top: 4px; }
 
-        .vehicle-option:hover {
-            border-color: rgba(255,255,255,0.2);
-            background: rgba(255,255,255,0.06);
-        }
-
-        .vehicle-option.active {
-            border-color: var(--neon-cyan);
-            background: rgba(0, 229, 255, 0.1);
-            box-shadow: 0 0 12px rgba(0, 229, 255, 0.15);
-        }
-
-        .vehicle-name {
-            font-size: 0.72rem;
-            font-weight: 700;
-            display: block;
-            margin-top: 4px;
-        }
-
-        /* Input Controls Setup */
         .input-group-row {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             pointer-events: auto;
         }
 
-        .amount-input-wrapper {
-            position: relative;
-            flex: 1;
-        }
-
-        .amount-input-wrapper span {
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-weight: 700;
-            color: var(--text-muted);
-        }
+        .amount-input-wrapper { position: relative; flex: 1; min-width: 0; }
+        .amount-input-wrapper span { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-weight: 700; color: var(--text-muted); }
 
         .bet-input-field {
             width: 100%;
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid var(--glass-border);
             border-radius: 14px;
-            padding: 16px 16px 16px 44px;
+            padding: 14px 14px 14px 40px;
             color: #fff;
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 700;
             outline: none;
             transition: border-color 0.2s ease;
         }
+        .bet-input-field:focus { border-color: rgba(255,255,255,0.25); }
 
-        .bet-input-field:focus {
-            border-color: rgba(255,255,255,0.25);
-        }
-
-        /* Action Buttons Core Execution Configurations */
         .action-button {
-            flex: 1;
+            flex-shrink: 0;
             border: none;
             border-radius: 14px;
-            font-size: 1.1rem;
+            font-size: 0.95rem;
             font-weight: 800;
             letter-spacing: -0.3px;
             cursor: pointer;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             color: #fff;
+            padding: 14px 16px;
+            white-space: nowrap;
         }
 
-        .btn-bet {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+        @media (max-width: 400px) {
+            .action-button { font-size: 0.8rem; padding: 12px 10px; }
+            .bet-input-field { font-size: 0.9rem; }
         }
 
-        .btn-bet:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
-        }
+        .btn-bet { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4); }
+        .btn-bet:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6); }
+        .btn-cashout { background: linear-gradient(135deg, #10b981 0%, #047857 100%); box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4); }
+        .btn-cashout:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6); }
+        .btn-disabled { background: #1e293b !important; color: var(--text-muted) !important; cursor: not-allowed !important; box-shadow: none !important; transform: none !important; }
 
-        .btn-cashout {
-            background: linear-gradient(135deg, #10b981 0%, #047857 100%);
-            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
-        }
-
-        .btn-cashout:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
-        }
-
-        .btn-disabled {
-            background: #1e293b !important;
-            color: var(--text-muted) !important;
-            cursor: not-allowed !important;
-            box-shadow: none !important;
-            transform: none !important;
-        }
-
-        /* Flight Activity Stream Ledger */
+        /* Ledger panel: constrained height on mobile so it never pushes layout off screen */
         .ledger-panel {
             background: rgba(0, 0, 0, 0.2);
             border: 1px solid var(--glass-border);
             border-radius: 16px;
-            padding: 16px;
+            padding: 14px;
             display: flex;
             flex-direction: column;
             pointer-events: auto;
+            min-width: 0;
         }
 
-        .ledger-title {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: var(--text-muted);
-            margin-bottom: 12px;
-            font-weight: 700;
-        }
+        .ledger-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 10px; font-weight: 700; }
 
         .ledger-stream {
             flex: 1;
             overflow-y: auto;
-            max-height: 110px;
+            max-height: 90px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 6px;
         }
 
-        .ledger-entry {
-            font-size: 0.85rem;
-            display: flex;
-            justify-content: space-between;
-            animation: fadeIn 0.25s ease-out;
+        @media (max-width: 640px) {
+            .ledger-stream { max-height: 60px; }
+            .ledger-panel { padding: 10px; }
+            .ledger-title { margin-bottom: 6px; font-size: 0.7rem; }
         }
 
-        /* Success Splash Toast Popups (cash out confirmation, separate from win-splash) */
+        .ledger-entry { font-size: 0.82rem; display: flex; justify-content: space-between; gap: 8px; animation: fadeIn 0.25s ease-out; }
+
         #cashout-toast {
             position: absolute;
             top: 30%;
@@ -489,13 +440,8 @@
             transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             box-shadow: 0 20px 40px rgba(0,0,0,0.5);
         }
+        #cashout-toast.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
-        #cashout-toast.visible {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-        }
-
-        /* Save progress modal */
         .save-progress-overlay {
             position: fixed;
             inset: 0;
@@ -508,10 +454,7 @@
             visibility: hidden;
             transition: opacity 0.25s ease, visibility 0.25s ease;
         }
-        .save-progress-overlay.show {
-            opacity: 1;
-            visibility: visible;
-        }
+        .save-progress-overlay.show { opacity: 1; visibility: visible; }
         .save-progress-modal {
             background: #111827;
             border: 1px solid var(--glass-border);
@@ -520,55 +463,18 @@
             width: min(360px, 90vw);
             box-shadow: 0 30px 60px rgba(0,0,0,0.6);
         }
-        .save-progress-modal h3 {
-            margin-bottom: 8px;
-            font-size: 1.15rem;
-        }
-        .save-progress-modal p {
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            margin-bottom: 16px;
-            line-height: 1.4;
-        }
-        .save-progress-modal input {
-            width: 100%;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            padding: 12px 14px;
-            color: #fff;
-            font-size: 0.95rem;
-            margin-bottom: 10px;
-            outline: none;
-        }
-        .save-progress-status {
-            font-size: 0.82rem;
-            color: var(--neon-amber);
-            min-height: 16px;
-            margin-bottom: 8px;
-        }
-        .save-progress-modal button {
-            width: 100%;
-            border: none;
-            border-radius: 10px;
-            padding: 12px;
-            font-weight: 700;
-            cursor: pointer;
-            margin-bottom: 8px;
-        }
-        #saveProgressConfirm {
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
-            color: #fff;
-        }
-        #saveProgressCancel {
-            background: transparent;
-            color: var(--text-muted);
-        }
+        .save-progress-modal h3 { margin-bottom: 8px; font-size: 1.15rem; }
+        .save-progress-modal p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px; line-height: 1.4; }
+        .save-progress-modal input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 0.95rem; margin-bottom: 10px; outline: none; }
+        .save-progress-status { font-size: 0.82rem; color: var(--neon-amber); min-height: 16px; margin-bottom: 8px; }
+        .save-progress-modal button { width: 100%; border: none; border-radius: 10px; padding: 12px; font-weight: 700; cursor: pointer; margin-bottom: 8px; }
+        #saveProgressConfirm { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        #saveProgressCancel { background: transparent; color: var(--text-muted); }
 
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* ============ INTRO / SPLASH SCREEN (ported from working build, 7.2s) ============ */
+        /* ===================== INTRO SCREEN ===================== */
         .intro-screen {
             position: fixed;
             inset: 0;
@@ -581,228 +487,50 @@
             cursor: pointer;
             transition: opacity 0.7s ease, visibility 0.7s ease;
         }
-        .intro-screen.intro-hidden {
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-        }
-        .intro-stars .intro-star {
-            position: absolute;
-            width: 3px;
-            height: 3px;
-            background: #fff;
-            border-radius: 50%;
-            opacity: 0.4;
-            animation: introStarTwinkle 2.8s ease-in-out infinite;
-        }
-        .intro-cloud {
-            position: absolute;
-            width: 240px;
-            height: 80px;
-            background: radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%);
-            border-radius: 50%;
-            filter: blur(6px);
-            will-change: transform;
-        }
+        .intro-screen.intro-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+        .intro-star { position: absolute; width: 3px; height: 3px; background: #fff; border-radius: 50%; opacity: 0.4; animation: introStarTwinkle 2.8s ease-in-out infinite; }
+        .intro-cloud { position: absolute; width: 240px; height: 80px; background: radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%); border-radius: 50%; filter: blur(6px); will-change: transform; }
         .intro-cloud-1 { top: 16%; left: -20%; animation: introCloudDrift 16s linear infinite; }
         .intro-cloud-2 { top: 64%; left: -30%; animation: introCloudDrift 21s linear infinite; animation-delay: 4s; }
-
-        .intro-content {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            padding: 24px;
-        }
-        .intro-eyebrow {
-            font-family: 'Inter', -apple-system, sans-serif;
-            font-size: 0.7rem;
-            letter-spacing: 3px;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: rgba(255,255,255,0.4);
-            margin-bottom: 16px;
-            opacity: 0;
-            animation: introReveal 0.8s ease forwards;
-            animation-delay: 0.15s;
-        }
-        .balloon-wrap {
-            position: relative;
-            width: clamp(120px, 30vw, 180px);
-            margin-bottom: 4px;
-            opacity: 0;
-            animation: introBalloonRise 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-        }
-        .balloon-wrap svg {
-            width: 100%;
-            display: block;
-            animation: introBalloonBob 4.6s ease-in-out infinite;
-            animation-delay: 1.3s;
-            transform-origin: 50% 78%;
-        }
-        .balloon-glow {
-            position: absolute;
-            bottom: -8px;
-            left: 50%;
-            width: 70%;
-            height: 26px;
-            transform: translateX(-50%);
-            background: radial-gradient(ellipse, rgba(251,191,36,0.35), transparent 70%);
-            filter: blur(8px);
-            border-radius: 50%;
-        }
+        .intro-content { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px; }
+        .intro-eyebrow { font-family: 'Inter', sans-serif; font-size: 0.7rem; letter-spacing: 3px; font-weight: 600; text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 16px; opacity: 0; animation: introReveal 0.8s ease forwards; animation-delay: 0.15s; }
+        .balloon-wrap { position: relative; width: clamp(120px, 30vw, 180px); margin-bottom: 4px; opacity: 0; animation: introBalloonRise 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .balloon-wrap svg { width: 100%; display: block; animation: introBalloonBob 4.6s ease-in-out infinite; animation-delay: 1.3s; transform-origin: 50% 78%; }
+        .balloon-glow { position: absolute; bottom: -8px; left: 50%; width: 70%; height: 26px; transform: translateX(-50%); background: radial-gradient(ellipse, rgba(251,191,36,0.35), transparent 70%); filter: blur(8px); border-radius: 50%; }
         .balloon-flame { animation: introFlameFlicker 0.55s ease-in-out infinite; transform-origin: 50% 100%; }
-
-        .intro-title {
-            margin: 16px 0 6px;
-            font-family: 'Sora', -apple-system, sans-serif;
-            line-height: 1.05;
-        }
-        .intro-title-line {
-            display: block;
-            opacity: 0;
-            transform: translateY(14px);
-            animation: introReveal 0.7s ease forwards;
-        }
-        .intro-title-line-1 {
-            font-size: clamp(0.95rem, 3vw, 1.25rem);
-            letter-spacing: 6px;
-            color: rgba(255,255,255,0.55);
-            font-weight: 700;
-            animation-delay: 1.5s;
-        }
-        .intro-title-line-2 {
-            font-size: clamp(2rem, 7vw, 3.3rem);
-            letter-spacing: 0.5px;
-            font-weight: 800;
-            background: linear-gradient(135deg, #fde68a, #fbbf24 45%, #34d399);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            animation-delay: 1.7s;
-        }
-        .intro-tagline {
-            font-family: 'Inter', -apple-system, sans-serif;
-            font-size: 0.95rem;
-            color: rgba(255,255,255,0.5);
-            margin: 4px 0 26px;
-            opacity: 0;
-            animation: introReveal 0.7s ease forwards;
-            animation-delay: 1.95s;
-        }
-        .intro-boarding {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            opacity: 0;
-            animation: introReveal 0.6s ease forwards;
-            animation-delay: 2.2s;
-        }
+        .intro-title { margin: 16px 0 6px; font-family: 'Sora', sans-serif; line-height: 1.05; }
+        .intro-title-line { display: block; opacity: 0; transform: translateY(14px); animation: introReveal 0.7s ease forwards; }
+        .intro-title-line-1 { font-size: clamp(0.95rem, 3vw, 1.25rem); letter-spacing: 6px; color: rgba(255,255,255,0.55); font-weight: 700; animation-delay: 1.5s; }
+        .intro-title-line-2 { font-size: clamp(2rem, 7vw, 3.3rem); letter-spacing: 0.5px; font-weight: 800; background: linear-gradient(135deg, #fde68a, #fbbf24 45%, #34d399); -webkit-background-clip: text; background-clip: text; color: transparent; animation-delay: 1.7s; }
+        .intro-tagline { font-family: 'Inter', sans-serif; font-size: 0.95rem; color: rgba(255,255,255,0.5); margin: 4px 0 26px; opacity: 0; animation: introReveal 0.7s ease forwards; animation-delay: 1.95s; }
+        .intro-boarding { display: flex; align-items: center; gap: 10px; opacity: 0; animation: introReveal 0.6s ease forwards; animation-delay: 2.2s; }
         .intro-dot { width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; animation: introDotPulse 1.2s ease-in-out infinite; }
         .intro-dot:nth-child(2) { animation-delay: 0.15s; }
         .intro-dot:nth-child(3) { animation-delay: 0.3s; }
-        .intro-boarding-text {
-            font-family: 'Inter', -apple-system, sans-serif;
-            font-size: 0.72rem;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            color: rgba(255,255,255,0.4);
-        }
-        .intro-progress-wrap {
-            margin-top: 22px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            opacity: 0;
-            animation: introReveal 0.6s ease forwards;
-            animation-delay: 2.5s;
-        }
-        .intro-progress {
-            width: clamp(160px, 40vw, 220px);
-            height: 4px;
-            border-radius: 4px;
-            background: rgba(255,255,255,0.08);
-            overflow: hidden;
-        }
-        .intro-progress-fill {
-            height: 100%;
-            width: 0%;
-            border-radius: 4px;
-            background: linear-gradient(90deg, #fbbf24, #34d399);
-            transition: width 0.3s linear;
-        }
-        .intro-percent {
-            font-family: 'Inter', -apple-system, sans-serif;
-            font-size: 0.68rem;
-            letter-spacing: 1.5px;
-            color: rgba(255,255,255,0.35);
-            font-weight: 600;
-        }
-        .intro-tip {
-            margin-top: 16px;
-            min-height: 16px;
-            font-family: 'Inter', -apple-system, sans-serif;
-            font-size: 0.78rem;
-            color: rgba(255,255,255,0.45);
-            opacity: 0;
-            animation: introReveal 0.6s ease forwards;
-            animation-delay: 2.7s;
-            transition: opacity 0.3s ease;
-        }
+        .intro-boarding-text { font-family: 'Inter', sans-serif; font-size: 0.72rem; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.4); }
+        .intro-progress-wrap { margin-top: 22px; display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: 0; animation: introReveal 0.6s ease forwards; animation-delay: 2.5s; }
+        .intro-progress { width: clamp(160px, 40vw, 220px); height: 4px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; }
+        .intro-progress-fill { height: 100%; width: 0%; border-radius: 4px; background: linear-gradient(90deg, #fbbf24, #34d399); transition: width 0.3s linear; }
+        .intro-percent { font-family: 'Inter', sans-serif; font-size: 0.68rem; letter-spacing: 1.5px; color: rgba(255,255,255,0.35); font-weight: 600; }
+        .intro-tip { margin-top: 16px; min-height: 16px; font-family: 'Inter', sans-serif; font-size: 0.78rem; color: rgba(255,255,255,0.45); opacity: 0; animation: introReveal 0.6s ease forwards; animation-delay: 2.7s; transition: opacity 0.3s ease; }
+        .intro-footer { position: absolute; bottom: 28px; left: 0; right: 0; text-align: center; font-family: 'Inter', sans-serif; font-size: 0.7rem; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.3); font-weight: 600; opacity: 0; animation: introReveal 0.6s ease forwards; animation-delay: 2.4s; }
 
-        .intro-footer {
-            position: absolute;
-            bottom: 28px;
-            left: 0;
-            right: 0;
-            text-align: center;
-            font-family: 'Inter', -apple-system, sans-serif;
-            font-size: 0.7rem;
-            letter-spacing: 2.5px;
-            text-transform: uppercase;
-            color: rgba(255,255,255,0.3);
-            font-weight: 600;
-            opacity: 0;
-            animation: introReveal 0.6s ease forwards;
-            animation-delay: 2.4s;
-        }
-
-        @keyframes introBalloonRise {
-            0% { opacity: 0; transform: translateY(120px) scale(0.85); }
-            70% { opacity: 1; transform: translateY(-8px) scale(1.02); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes introBalloonBob {
-            0%, 100% { transform: translateY(0) rotate(-1.2deg); }
-            50% { transform: translateY(-12px) rotate(1.2deg); }
-        }
-        @keyframes introFlameFlicker {
-            0%, 100% { opacity: 0.85; transform: scaleY(1); }
-            50% { opacity: 1; transform: scaleY(1.18); }
-        }
+        @keyframes introBalloonRise { 0% { opacity: 0; transform: translateY(120px) scale(0.85); } 70% { opacity: 1; transform: translateY(-8px) scale(1.02); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes introBalloonBob { 0%, 100% { transform: translateY(0) rotate(-1.2deg); } 50% { transform: translateY(-12px) rotate(1.2deg); } }
+        @keyframes introFlameFlicker { 0%, 100% { opacity: 0.85; transform: scaleY(1); } 50% { opacity: 1; transform: scaleY(1.18); } }
         @keyframes introStarTwinkle { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.9; } }
         @keyframes introCloudDrift { from { transform: translateX(0); } to { transform: translateX(160vw); } }
         @keyframes introReveal { to { opacity: 1; transform: translateY(0); } }
         @keyframes introDotPulse { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.7); } 40% { opacity: 1; transform: scale(1); } }
 
         @media (prefers-reduced-motion: reduce) {
-            .balloon-wrap, .intro-title-line, .intro-tagline, .intro-boarding, .intro-footer, .intro-eyebrow {
-                animation: none !important;
-                opacity: 1 !important;
-                transform: none !important;
-            }
-            .balloon-wrap svg, .balloon-flame, .intro-dot, .intro-cloud, .intro-star {
-                animation: none !important;
-            }
+            .balloon-wrap, .intro-title-line, .intro-tagline, .intro-boarding, .intro-footer, .intro-eyebrow { animation: none !important; opacity: 1 !important; transform: none !important; }
+            .balloon-wrap svg, .balloon-flame, .intro-dot, .intro-cloud, .intro-star { animation: none !important; }
         }
     </style>
 </head>
 <body>
 
-    <!-- ============ INTRO / SPLASH SCREEN (7.2s, ported from the working build) ============ -->
     <div id="introScreen" class="intro-screen" role="img" aria-label="Kwacha Balloon Arena is loading">
         <div class="intro-stars">
             <span class="intro-star" style="top:10%; left:14%;"></span>
@@ -816,42 +544,24 @@
         </div>
         <div class="intro-cloud intro-cloud-1"></div>
         <div class="intro-cloud intro-cloud-2"></div>
-
         <div class="intro-content">
             <div class="intro-eyebrow">Vyeta Digital Solutions Presents</div>
-
             <div class="balloon-wrap">
                 <div class="balloon-glow"></div>
                 <svg viewBox="0 0 220 320" xmlns="http://www.w3.org/2000/svg">
                     <defs>
-                        <linearGradient id="introGold" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="#fde68a"/>
-                            <stop offset="100%" stop-color="#f59e0b"/>
-                        </linearGradient>
-                        <linearGradient id="introGreen" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="#6ee7b7"/>
-                            <stop offset="100%" stop-color="#10b981"/>
-                        </linearGradient>
-                        <radialGradient id="introSheen" cx="35%" cy="18%" r="60%">
-                            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
-                            <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-                        </radialGradient>
-                        <radialGradient id="introFlameGrad" cx="50%" cy="30%" r="60%">
-                            <stop offset="0%" stop-color="#fff7d6"/>
-                            <stop offset="55%" stop-color="#fbbf24"/>
-                            <stop offset="100%" stop-color="#ea580c" stop-opacity="0"/>
-                        </radialGradient>
-                        <clipPath id="introBalloonClip">
-                            <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z"/>
-                        </clipPath>
+                        <linearGradient id="introGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fde68a"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient>
+                        <linearGradient id="introGreen" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6ee7b7"/><stop offset="100%" stop-color="#10b981"/></linearGradient>
+                        <radialGradient id="introSheen" cx="35%" cy="18%" r="60%"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/><stop offset="100%" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+                        <radialGradient id="introFlameGrad" cx="50%" cy="30%" r="60%"><stop offset="0%" stop-color="#fff7d6"/><stop offset="55%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#ea580c" stop-opacity="0"/></radialGradient>
+                        <clipPath id="introBalloonClip"><path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z"/></clipPath>
                     </defs>
-
                     <g clip-path="url(#introBalloonClip)">
-                        <rect x="0"   y="0" width="22" height="240" fill="url(#introGold)"/>
-                        <rect x="22"  y="0" width="22" height="240" fill="url(#introGreen)"/>
-                        <rect x="44"  y="0" width="22" height="240" fill="url(#introGold)"/>
-                        <rect x="66"  y="0" width="22" height="240" fill="url(#introGreen)"/>
-                        <rect x="88"  y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="0" y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="22" y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="44" y="0" width="22" height="240" fill="url(#introGold)"/>
+                        <rect x="66" y="0" width="22" height="240" fill="url(#introGreen)"/>
+                        <rect x="88" y="0" width="22" height="240" fill="url(#introGold)"/>
                         <rect x="110" y="0" width="22" height="240" fill="url(#introGreen)"/>
                         <rect x="132" y="0" width="22" height="240" fill="url(#introGold)"/>
                         <rect x="154" y="0" width="22" height="240" fill="url(#introGreen)"/>
@@ -860,42 +570,34 @@
                     </g>
                     <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z" fill="url(#introSheen)"/>
                     <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z" fill="none" stroke="rgba(0,0,0,0.25)" stroke-width="2"/>
-
                     <circle cx="110" cy="120" r="26" fill="#0b1220" opacity="0.85"/>
                     <text x="110" y="131" font-size="30" font-weight="900" fill="#fbbf24" text-anchor="middle" font-family="'Sora', sans-serif">K</text>
-
                     <path d="M85 235 L135 235 L125 248 L95 248 Z" fill="#92400e"/>
                     <ellipse class="balloon-flame" cx="110" cy="252" rx="10" ry="16" fill="url(#introFlameGrad)"/>
-
                     <line x1="95" y1="248" x2="78" y2="278" stroke="#a8a29e" stroke-width="2"/>
                     <line x1="125" y1="248" x2="142" y2="278" stroke="#a8a29e" stroke-width="2"/>
                     <line x1="105" y1="248" x2="92" y2="278" stroke="#a8a29e" stroke-width="2"/>
                     <line x1="115" y1="248" x2="128" y2="278" stroke="#a8a29e" stroke-width="2"/>
-
                     <rect x="78" y="278" width="64" height="30" rx="6" fill="#7c5a3a"/>
                     <line x1="78" y1="288" x2="142" y2="288" stroke="#5c4128" stroke-width="1.5" opacity="0.7"/>
                     <line x1="78" y1="298" x2="142" y2="298" stroke="#5c4128" stroke-width="1.5" opacity="0.7"/>
                 </svg>
             </div>
-
             <h1 class="intro-title">
                 <span class="intro-title-line intro-title-line-1">KWACHA</span>
                 <span class="intro-title-line intro-title-line-2">BALLOON ARENA</span>
             </h1>
             <p class="intro-tagline">Fortunes rise. Know when to jump.</p>
-
             <div class="intro-boarding">
                 <span class="intro-dot"></span><span class="intro-dot"></span><span class="intro-dot"></span>
                 <span class="intro-boarding-text">Boarding flight deck</span>
             </div>
-
             <div class="intro-progress-wrap">
                 <div class="intro-progress"><div class="intro-progress-fill" id="introProgressFill"></div></div>
                 <div class="intro-percent" id="introPercent">0%</div>
             </div>
             <div class="intro-tip" id="introTip">Tip: Cash out before the balloon drifts out of sight.</div>
         </div>
-
         <div class="intro-footer">Powered by Vyeta</div>
     </div>
 
@@ -906,8 +608,7 @@
             var fill = document.getElementById('introProgressFill');
             var percentEl = document.getElementById('introPercent');
             var tipEl = document.getElementById('introTip');
-
-            var TOTAL_MS = 7200; // feels like a real game loading, not just a logo flash
+            var TOTAL_MS = 7200;
             var tips = [
                 "Tip: Cash out before the balloon drifts out of sight.",
                 "Tip: The longer you wait, the bigger the multiplier — and the risk.",
@@ -917,7 +618,6 @@
                 "Tip: A small, certain win beats a big, missed one."
             ];
             var tipIndex = 0;
-
             var startTime = Date.now();
             var progressInterval = setInterval(function () {
                 var elapsed = Date.now() - startTime;
@@ -926,16 +626,11 @@
                 percentEl.textContent = pct + '%';
                 if (pct >= 100) clearInterval(progressInterval);
             }, 80);
-
             var tipInterval = setInterval(function () {
                 tipIndex = (tipIndex + 1) % tips.length;
                 tipEl.style.opacity = 0;
-                setTimeout(function () {
-                    tipEl.textContent = tips[tipIndex];
-                    tipEl.style.opacity = 1;
-                }, 250);
+                setTimeout(function () { tipEl.textContent = tips[tipIndex]; tipEl.style.opacity = 1; }, 250);
             }, 1500);
-
             function dismiss() {
                 clearInterval(progressInterval);
                 clearInterval(tipInterval);
@@ -943,16 +638,11 @@
                 setTimeout(function () { intro.remove(); }, 700);
             }
             var autoTimer = setTimeout(dismiss, TOTAL_MS);
-            intro.addEventListener('click', function () {
-                clearTimeout(autoTimer);
-                dismiss();
-            });
+            intro.addEventListener('click', function () { clearTimeout(autoTimer); dismiss(); });
         })();
     </script>
 
-    <!-- Main Live Game Layout Display -->
     <div id="game-viewport">
-
         <header>
             <div class="brand-logo">KWACHA BALLOON ADVENTURES</div>
             <div class="header-actions">
@@ -962,7 +652,7 @@
                 </div>
                 <button id="save-progress-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                    Save Progress
+                    <span class="save-btn-label">Save Progress</span>
                 </button>
             </div>
         </header>
@@ -971,23 +661,33 @@
             <canvas id="flight-arena"></canvas>
         </div>
 
+        <!-- HUD: upper area only, so craft at 65% canvas height is always visible -->
         <div class="hud-overlay">
             <div class="live-multiplier-display">
                 <div id="multiplier-text">1.00x</div>
+                <!-- Status label: hidden during active flight, shown for countdown / crash / connecting -->
                 <div id="game-status-label">Connecting...</div>
+
+                <!-- Countdown timer ring (shown during betting phase) -->
+                <div id="countdown-display">
+                    <div class="countdown-wrap">
+                        <svg id="countdown-ring-svg" viewBox="0 0 56 56">
+                            <circle id="countdown-ring-track" cx="28" cy="28" r="22"/>
+                            <circle id="countdown-ring-fill" cx="28" cy="28" r="22"/>
+                        </svg>
+                        <span id="countdown-number">5</span>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Win splash, ported from the working build's celebration popup -->
         <div id="win-splash">
             <div class="win-label">Cash Secured</div>
             <div id="win-splash-amount" class="win-amount">+ ZK 0.00</div>
         </div>
 
-        <!-- System User Action Interactive Grid -->
         <div class="control-board">
             <div class="bet-interface-panel">
-                <!-- Vehicle Selector: compact chip, expands to a floating popover on tap -->
                 <div class="vehicle-selector" id="vehicle-selector">
                     <button type="button" class="vehicle-chip-btn" id="vehicle-chip-btn">
                         <span class="chip-emoji" id="chip-emoji">🎈</span>
@@ -997,7 +697,6 @@
                         </span>
                         <svg class="chip-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
-
                     <div class="vehicle-popover" id="vehicle-popover">
                         <div class="vehicle-option active" data-vehicle="balloon" data-emoji="🎈" data-name="Kwacha Balloon">
                             <span style="font-size:1.4rem;">🎈</span>
@@ -1025,20 +724,16 @@
 
             <div class="ledger-panel">
                 <div class="ledger-title">Live Flight Activity</div>
-                <div id="ledger-stream" class="ledger-stream">
-                    <!-- Real-time dynamic game state messages stream down here -->
-                </div>
+                <div id="ledger-stream" class="ledger-stream"></div>
             </div>
         </div>
     </div>
 
-    <!-- Cash out confirmation toast -->
     <div id="cashout-toast">
         <h2 style="font-size:1.8rem; font-weight:800; margin-bottom:4px;">FLIGHT SECURED!</h2>
         <p id="toast-payout-details" style="font-size:1.1rem; font-weight:600; opacity:0.95;">You earned ZK 0.00</p>
     </div>
 
-    <!-- Save progress modal -->
     <div class="save-progress-overlay" id="saveProgressOverlay">
         <div class="save-progress-modal">
             <h3>Save your progress</h3>
@@ -1047,24 +742,26 @@
             <input type="password" id="savePassword" placeholder="Create a password">
             <div class="save-progress-status" id="saveProgressStatus"></div>
             <button id="saveProgressConfirm">Save account</button>
-            <button id="saveProgressCancel" class="save-progress-cancel">Not now</button>
+            <button id="saveProgressCancel">Not now</button>
         </div>
     </div>
 
-    <!-- Frontend Core Operational Physics Execution Script -->
     <script>
         const SERVER_URL = "https://kids-games-o79b.onrender.com";
         let socket;
 
-        // State Machine Cache Mapping
         let currentBalance = 0;
         let currentMultiplier = 1.00;
-        let gameStatus = "CONNECTING"; // CONNECTING, BETTING, IN_FLIGHT, CRASHED
+        let gameStatus = "CONNECTING";
         let activeVehicle = "balloon";
-        let clientBetState = "NONE"; // NONE, PLACED, CASHED_OUT
+        let clientBetState = "NONE";
         let currentBetAmount = 0;
 
-        // Graphic Physics Configuration State System Maps
+        // Countdown state
+        let countdownInterval = null;
+        let countdownSeconds = 0;
+        const COUNTDOWN_TOTAL = 138.23; // circumference for r=22
+
         const canvas = document.getElementById('flight-arena');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -1073,26 +770,23 @@
         let targetCraftY = 400;
         let ambientStars = [];
 
-        // UI Element References
         const actionBtn = document.getElementById('action-btn');
         const betInput = document.getElementById('bet-input');
         const multiplierText = document.getElementById('multiplier-text');
         const statusLabel = document.getElementById('game-status-label');
         const balanceDisplay = document.getElementById('balance-display');
         const ledgerStream = document.getElementById('ledger-stream');
+        const countdownDisplay = document.getElementById('countdown-display');
+        const countdownNumber = document.getElementById('countdown-number');
+        const countdownRingFill = document.getElementById('countdown-ring-fill');
 
-        // Clean user handling initialization
         window.addEventListener('DOMContentLoaded', () => {
             initCanvasResolution();
             generateStarfieldGrid();
             setupInterfaceInteractions();
             setupSaveProgressModal();
             window.addEventListener('resize', initCanvasResolution);
-
-            // Execute high performance requestAnimationFrame loop tracker mapping configuration
             requestAnimationFrame(renderCorePhysicsArenaFrame);
-
-            // Kick off real auth + socket connection
             connectToGame();
         });
 
@@ -1118,10 +812,46 @@
             }
         }
 
+        // ── Countdown helpers ──────────────────────────────────────────────
+        function startCountdown(seconds) {
+            stopCountdown();
+            countdownSeconds = seconds;
+            countdownDisplay.classList.add('visible');
+            updateCountdownUI(countdownSeconds);
+
+            countdownInterval = setInterval(() => {
+                countdownSeconds -= 1;
+                if (countdownSeconds <= 0) {
+                    stopCountdown();
+                } else {
+                    updateCountdownUI(countdownSeconds);
+                }
+            }, 1000);
+        }
+
+        function stopCountdown() {
+            if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+            countdownDisplay.classList.remove('visible');
+        }
+
+        function updateCountdownUI(s) {
+            countdownNumber.textContent = s;
+            // Animate the SVG ring: full at start, drains to 0
+            const ratio = s / (countdownSeconds || s || 1);
+            // We want the ring to be FULL at max seconds and EMPTY at 0
+            const initialTotal = parseInt(countdownRingFill.dataset.total || s);
+            if (!countdownRingFill.dataset.total) countdownRingFill.dataset.total = s;
+            const progress = s / parseInt(countdownRingFill.dataset.total);
+            const offset = COUNTDOWN_TOTAL * (1 - progress);
+            countdownRingFill.style.strokeDashoffset = offset;
+            // Colour shifts amber → red as time runs low
+            if (s <= 2) countdownRingFill.style.stroke = 'var(--neon-red)';
+            else if (s <= 4) countdownRingFill.style.stroke = 'var(--neon-amber)';
+            else countdownRingFill.style.stroke = 'var(--neon-cyan)';
+        }
+        // ──────────────────────────────────────────────────────────────────
+
         function setupInterfaceInteractions() {
-            // Vehicle Selector: chip toggles a floating popover; picking an
-            // option updates the chip and closes the popover. Locked while a
-            // bet is in flight, same rule as before.
             const vehicleSelector = document.getElementById('vehicle-selector');
             const chipBtn = document.getElementById('vehicle-chip-btn');
             const popover = document.getElementById('vehicle-popover');
@@ -1131,19 +861,16 @@
             function isVehicleLocked() {
                 return gameStatus === "IN_FLIGHT" && clientBetState === "PLACED";
             }
-
             function closePopover() {
                 popover.classList.remove('open');
                 vehicleSelector.classList.remove('open');
             }
-
             chipBtn.addEventListener('click', () => {
-                if (isVehicleLocked()) return; // Frame-lock choices during running operations
+                if (isVehicleLocked()) return;
                 const willOpen = !popover.classList.contains('open');
                 popover.classList.toggle('open', willOpen);
                 vehicleSelector.classList.toggle('open', willOpen);
             });
-
             document.querySelectorAll('.vehicle-option').forEach(opt => {
                 opt.addEventListener('click', () => {
                     if (isVehicleLocked()) return;
@@ -1152,22 +879,18 @@
                     activeVehicle = opt.dataset.vehicle;
                     chipEmoji.textContent = opt.dataset.emoji;
                     chipName.textContent = opt.dataset.name;
-                    closePopover(); // Selector leaves the screen the moment a pick is made
+                    closePopover();
                 });
             });
-
-            // Tapping anywhere outside the selector also collapses it, so it
-            // never lingers over the flight path.
             document.addEventListener('click', (e) => {
                 if (!vehicleSelector.contains(e.target)) closePopover();
             });
 
-            // Action Primary Button Processing Trigger Framework Mapping
             actionBtn.addEventListener('click', () => {
                 if(gameStatus === "BETTING" && clientBetState === "NONE") {
                     const amt = parseInt(betInput.value);
                     if(isNaN(amt) || amt <= 0 || amt > currentBalance) {
-                        alert("Please enter a valid ticket price within your budget allocation layout.");
+                        alert("Please enter a valid ticket price within your budget.");
                         return;
                     }
                     currentBetAmount = amt;
@@ -1182,26 +905,25 @@
             socket.on('initial_state', (data) => {
                 currentBalance = data.balance;
                 updateBalanceInterfaceElement();
-                logFlightEvent("Systems Online. Ready for departure calculations.");
+                logFlightEvent("Systems Online. Ready for departure.");
             });
 
             socket.on('connect_error', (err) => {
-                console.error("Socket connect_error:", err.message);
                 gameStatus = "CONNECTING";
                 statusLabel.innerText = "Connection failed: " + err.message;
                 actionBtn.className = "action-button btn-disabled";
                 actionBtn.innerText = "RECONNECTING...";
                 betInput.setAttribute('disabled', 'true');
-                logFlightEvent("Connection error: " + err.message);
+                stopCountdown();
             });
 
             socket.on('disconnect', (reason) => {
-                console.warn("Socket disconnected:", reason);
                 gameStatus = "CONNECTING";
-                statusLabel.innerText = "Disconnected: " + reason;
+                statusLabel.innerText = "Disconnected";
                 actionBtn.className = "action-button btn-disabled";
                 actionBtn.innerText = "RECONNECTING...";
                 betInput.setAttribute('disabled', 'true');
+                stopCountdown();
             });
 
             socket.on('error_message', (data) => { alert(data.message); });
@@ -1212,7 +934,12 @@
                 currentMultiplier = 1.00;
                 multiplierText.innerText = "1.00x";
                 multiplierText.style.color = "var(--text-main)";
-                statusLabel.innerText = "Accepting Flight Tickets";
+
+                // Show "Next flight" label and start countdown
+                // Server sends countdown duration; default to 5s if not provided
+                const cdSeconds = (data && data.countdown) ? data.countdown : 5;
+                statusLabel.innerText = "Next flight in";
+                startCountdown(cdSeconds);
 
                 actionBtn.className = "action-button btn-bet";
                 actionBtn.innerText = "BUY FLIGHT TICKET";
@@ -1237,7 +964,9 @@
 
             socket.on('game_started', () => {
                 gameStatus = "IN_FLIGHT";
-                statusLabel.innerText = "In Flight - Multiplier Rising";
+                stopCountdown();                 // remove countdown ring
+                statusLabel.innerText = "";      // hide status label during active flight
+
                 if(clientBetState === "PLACED") {
                     actionBtn.className = "action-button btn-cashout";
                     actionBtn.innerText = `CASH OUT (ZK ${(currentBetAmount * 1.00).toFixed(2)})`;
@@ -1252,8 +981,6 @@
                 if(gameStatus !== "IN_FLIGHT") return;
                 currentMultiplier = data.multiplier;
                 multiplierText.innerText = currentMultiplier.toFixed(2) + "x";
-
-                // Color scaling dynamically shift over standard flight intervals
                 if(currentMultiplier > 5.0) multiplierText.style.color = "var(--neon-red)";
                 else if(currentMultiplier > 2.0) multiplierText.style.color = "var(--neon-amber)";
                 else multiplierText.style.color = "var(--neon-green)";
@@ -1267,7 +994,6 @@
                 clientBetState = "CASHED_OUT";
                 currentBalance = data.newBalance !== undefined ? data.newBalance : data.balance;
                 updateBalanceInterfaceElement();
-
                 actionBtn.className = "action-button btn-disabled";
                 actionBtn.innerText = "EARNINGS SECURED";
 
@@ -1277,10 +1003,8 @@
                 toast.classList.add('visible');
                 setTimeout(() => toast.classList.remove('visible'), 2500);
 
-                // 🏆 Center screen win splash
                 const winSplash = document.getElementById('win-splash');
-                const winSplashAmount = document.getElementById('win-splash-amount');
-                winSplashAmount.innerText = `+ ZK ${payout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                document.getElementById('win-splash-amount').innerText = `+ ZK ${payout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 winSplash.classList.add('show');
                 setTimeout(() => winSplash.classList.remove('show'), 2500);
 
@@ -1291,26 +1015,20 @@
 
             socket.on('game_crashed', (data) => {
                 gameStatus = "CRASHED";
+                stopCountdown();
                 statusLabel.innerText = "FLIGHT TERMINATED";
                 multiplierText.innerText = "CRASHED @" + data.crashedAt.toFixed(2) + "x";
                 multiplierText.style.color = "var(--neon-red)";
-
                 actionBtn.className = "action-button btn-disabled";
                 actionBtn.innerText = "CRAFT DOWN";
                 betInput.setAttribute('disabled', 'true');
-
-                // Spawn dramatic explosion burst at current point calculations
                 triggerExplosionBurst(craftX, craftY);
                 logFlightEvent(`Craft lost signal at ${data.crashedAt.toFixed(2)}x`);
             });
 
             socket.on('ledger_update', (data) => {
-                // Server may send either a plain string or { message, type }
-                if (typeof data === 'string') {
-                    logFlightEvent(data);
-                } else if (data && data.message) {
-                    logFlightEvent(data.message);
-                }
+                if (typeof data === 'string') logFlightEvent(data);
+                else if (data && data.message) logFlightEvent(data.message);
             });
         }
 
@@ -1321,7 +1039,7 @@
         function logFlightEvent(text) {
             const entry = document.createElement('div');
             entry.className = "ledger-entry";
-            entry.innerHTML = `<span style="color:var(--text-muted)">[${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}]</span> <span>${text}</span>`;
+            entry.innerHTML = `<span style="color:var(--text-muted);flex-shrink:0">[${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}]</span><span>${text}</span>`;
             ledgerStream.prepend(entry);
             if(ledgerStream.children.length > 15) ledgerStream.lastChild.remove();
         }
@@ -1329,27 +1047,22 @@
         function triggerExplosionBurst(x, y) {
             for(let i=0; i<45; i++) {
                 particles.push({
-                    x: x,
-                    y: y,
+                    x, y,
                     vx: (Math.random() - 0.5) * 12,
                     vy: (Math.random() - 0.5) * 12,
                     radius: Math.random() * 6 + 2,
-                    color: Math.random() > 0.4 ? 'rgba(239, 68, 68, 0.9)' : 'rgba(245, 158, 11, 0.9)',
+                    color: Math.random() > 0.4 ? 'rgba(239,68,68,0.9)' : 'rgba(245,158,11,0.9)',
                     alpha: 1,
                     decay: Math.random() * 0.03 + 0.015
                 });
             }
         }
 
-        // Complete Hardware High Performance Real-Time Rendering Engine
         function renderCorePhysicsArenaFrame() {
             const w = canvas.width / (window.devicePixelRatio || 1);
             const h = canvas.height / (window.devicePixelRatio || 1);
-
-            // Clean space atmosphere redraw loop
             ctx.clearRect(0, 0, w, h);
 
-            // Ambient Sky Speed Shifting Base Coordinates Gradient
             let skyGrad = ctx.createLinearGradient(0, 0, 0, h);
             if (gameStatus === "IN_FLIGHT") {
                 let shift = Math.min(currentMultiplier * 15, 85);
@@ -1362,55 +1075,42 @@
             ctx.fillStyle = skyGrad;
             ctx.fillRect(0, 0, w, h);
 
-            // Parallax Ambient Space Grid Speed Stars Processing Loop
             ambientStars.forEach(star => {
                 if(gameStatus === "IN_FLIGHT") {
                     star.x -= (currentMultiplier * 1.5);
-                    if(star.x < 0) {
-                        star.x = w;
-                        star.y = Math.random() * h;
-                    }
+                    if(star.x < 0) { star.x = w; star.y = Math.random() * h; }
                 }
-                ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness * (0.4 + Math.sin(Date.now()*0.002)*0.3)})`;
+                ctx.fillStyle = `rgba(255,255,255,${star.brightness * (0.4 + Math.sin(Date.now()*0.002)*0.3)})`;
                 ctx.fillRect(star.x, star.y, star.size, star.size);
             });
 
-            // Handle Flight Physics Trajectory Target Coordinates
             if (gameStatus === "IN_FLIGHT") {
                 craftX = Math.min(100 + (currentMultiplier * 25), w * 0.45);
                 targetCraftY = h * 0.7 - (Math.log(currentMultiplier + 1) * h * 0.18);
-                craftY += (targetCraftY - craftY) * 0.08; // Smooth dampening frame transitions
+                craftY += (targetCraftY - craftY) * 0.08;
 
-                // Procedurally output engine trail sparks at exhaust port positions
                 if (Math.random() > 0.15) {
                     particles.push({
                         x: craftX - 15,
                         y: craftY + (activeVehicle === "balloon" ? 20 : 5),
-                        vx: - (Math.random() * 4 + currentMultiplier),
+                        vx: -(Math.random() * 4 + currentMultiplier),
                         vy: (Math.random() - 0.5) * 2,
                         radius: Math.random() * 3 + 1,
-                        color: activeVehicle === "broom" ? 'rgba(147, 51, 234, 0.7)' : 'rgba(0, 229, 255, 0.7)',
+                        color: activeVehicle === "broom" ? 'rgba(147,51,234,0.7)' : 'rgba(0,229,255,0.7)',
                         alpha: 1,
                         decay: 0.02
                     });
                 }
             } else if(gameStatus === "BETTING") {
                 craftX = 100;
-                // Elegant passive atmospheric float/bobbing wave calculation loop to give the crafts life when idle
                 targetCraftY = h * 0.65 + Math.sin(Date.now() * 0.004) * 6;
                 craftY += (targetCraftY - craftY) * 0.1;
             }
 
-            // Loop Process Trails/Explosions Particles Array Elements
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.alpha -= p.decay;
-                if(p.alpha <= 0) {
-                    particles.splice(i, 1);
-                    continue;
-                }
+                p.x += p.vx; p.y += p.vy; p.alpha -= p.decay;
+                if(p.alpha <= 0) { particles.splice(i, 1); continue; }
                 ctx.save();
                 ctx.globalAlpha = p.alpha;
                 ctx.shadowBlur = 10;
@@ -1422,166 +1122,71 @@
                 ctx.restore();
             }
 
-            // Render Selected Active Craft Variation Vectors if system not currently crashed out
             if(gameStatus !== "CRASHED") {
                 ctx.save();
                 ctx.shadowBlur = 25;
-                ctx.shadowColor = 'rgba(0, 229, 255, 0.4)';
-
-                if (activeVehicle === "balloon") {
-                    drawKwachaBalloonVector(craftX, craftY);
-                } else if (activeVehicle === "lwango") {
-                    drawLwangoBasketVector(craftX, craftY);
-                } else if (activeVehicle === "broom") {
-                    drawBroomstickVector(craftX, craftY);
-                }
-
+                ctx.shadowColor = 'rgba(0,229,255,0.4)';
+                if (activeVehicle === "balloon") drawKwachaBalloonVector(craftX, craftY);
+                else if (activeVehicle === "lwango") drawLwangoBasketVector(craftX, craftY);
+                else if (activeVehicle === "broom") drawBroomstickVector(craftX, craftY);
                 ctx.restore();
             }
 
             requestAnimationFrame(renderCorePhysicsArenaFrame);
         }
 
-        // High fidelity procedural asset layout vectors rendering system blocks
         function drawKwachaBalloonVector(x, y) {
             let grad = ctx.createRadialGradient(x, y-25, 5, x, y-25, 30);
-            grad.addColorStop(0, '#f43f5e');
-            grad.addColorStop(1, '#be123c');
+            grad.addColorStop(0, '#f43f5e'); grad.addColorStop(1, '#be123c');
             ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(x, y - 25, 28, 0, Math.PI * 2);
-            ctx.fill();
-
+            ctx.beginPath(); ctx.arc(x, y - 25, 28, 0, Math.PI * 2); ctx.fill();
             if (gameStatus === "IN_FLIGHT" && Math.random() > 0.2) {
-                ctx.fillStyle = 'rgba(245, 158, 11, 0.9)';
-                ctx.beginPath();
-                ctx.moveTo(x - 4, y - 2); ctx.lineTo(x + 4, y - 2); ctx.lineTo(x, y + 6);
-                ctx.closePath();
-                ctx.fill();
+                ctx.fillStyle = 'rgba(245,158,11,0.9)';
+                ctx.beginPath(); ctx.moveTo(x-4,y-2); ctx.lineTo(x+4,y-2); ctx.lineTo(x,y+6); ctx.closePath(); ctx.fill();
             }
-
-            ctx.strokeStyle = '#94a3b8';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(x - 12, y - 10); ctx.lineTo(x - 8, y + 8);
-            ctx.moveTo(x + 12, y - 10); ctx.lineTo(x + 8, y + 8);
-            ctx.stroke();
-
-            ctx.fillStyle = '#78350f';
-            ctx.fillRect(x - 10, y + 8, 20, 14);
-
-            ctx.fillStyle = '#e2e8f0';
-            ctx.beginPath();
-            ctx.arc(x, y + 4, 4, 0, Math.PI*2);
-            ctx.fill();
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x-12,y-10); ctx.lineTo(x-8,y+8); ctx.moveTo(x+12,y-10); ctx.lineTo(x+8,y+8); ctx.stroke();
+            ctx.fillStyle = '#78350f'; ctx.fillRect(x-10, y+8, 20, 14);
+            ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.arc(x, y+4, 4, 0, Math.PI*2); ctx.fill();
         }
 
         function drawLwangoBasketVector(x, y) {
-            ctx.strokeStyle = '#d97706';
-            ctx.lineWidth = 3;
-            ctx.fillStyle = '#b45309';
-
-            ctx.beginPath();
-            ctx.arc(x, y, 26, 0, Math.PI, false);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(x - 20, y + 10); ctx.lineTo(x + 20, y + 10);
-            ctx.moveTo(x - 12, y + 18); ctx.lineTo(x + 12, y + 18);
-            ctx.stroke();
-
-            ctx.fillStyle = '#f1f5f9';
-            ctx.beginPath();
-            ctx.arc(x, y - 6, 5, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.fillStyle = '#cbd5e1';
-            ctx.fillRect(x - 4, y - 1, 9, 10);
+            ctx.strokeStyle = '#d97706'; ctx.lineWidth = 3; ctx.fillStyle = '#b45309';
+            ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI, false); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.strokeStyle = 'rgba(251,191,36,0.4)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(x-20,y+10); ctx.lineTo(x+20,y+10); ctx.moveTo(x-12,y+18); ctx.lineTo(x+12,y+18); ctx.stroke();
+            ctx.fillStyle = '#f1f5f9'; ctx.beginPath(); ctx.arc(x, y-6, 5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#cbd5e1'; ctx.fillRect(x-4, y-1, 9, 10);
         }
 
         function drawBroomstickVector(x, y) {
-            ctx.strokeStyle = '#854d0e';
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(x - 32, y + 8);
-            ctx.lineTo(x + 28, y - 6);
-            ctx.stroke();
-
+            ctx.strokeStyle = '#854d0e'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(x-32, y+8); ctx.lineTo(x+28, y-6); ctx.stroke();
             ctx.fillStyle = '#ca8a04';
-            ctx.beginPath();
-            ctx.moveTo(x - 30, y + 8);
-            ctx.lineTo(x - 48, y + 18);
-            ctx.lineTo(x - 46, y + 2);
-            ctx.closePath();
-            ctx.fill();
-
-            ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x - 33, y + 7);
-            ctx.lineTo(x - 31, y + 10);
-            ctx.stroke();
-
-            ctx.fillStyle = '#f8fafc';
-            ctx.beginPath();
-            ctx.arc(x + 4, y - 8, 5, 0, Math.PI * 2);
-            ctx.fill();
-
+            ctx.beginPath(); ctx.moveTo(x-30,y+8); ctx.lineTo(x-48,y+18); ctx.lineTo(x-46,y+2); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x-33,y+7); ctx.lineTo(x-31,y+10); ctx.stroke();
+            ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(x+4, y-8, 5, 0, Math.PI*2); ctx.fill();
             ctx.fillStyle = '#38bdf8';
-            ctx.beginPath();
-            ctx.moveTo(x - 6, y + 2);
-            ctx.lineTo(x + 4, y - 3);
-            ctx.lineTo(x + 10, y + 4);
-            ctx.lineTo(x - 2, y + 6);
-            ctx.closePath();
-            ctx.fill();
+            ctx.beginPath(); ctx.moveTo(x-6,y+2); ctx.lineTo(x+4,y-3); ctx.lineTo(x+10,y+4); ctx.lineTo(x-2,y+6); ctx.closePath(); ctx.fill();
         }
 
-        // --- FRICTIONLESS SIGN-IN ---
-        // Every visitor gets a real (but anonymous) Supabase session automatically.
-        // That session's user id is what the server uses to track balance persistently,
-        // and it's the same id every time this browser comes back (Supabase keeps it
-        // in localStorage) — so progress survives refreshes without ever asking the
-        // player to sign up first. This is the piece that was missing before: the
-        // previous version sent a made-up local string as the auth token, which is
-        // not a valid Supabase JWT, so the server rejected every connection with
-        // "Authentication failed: Access denied".
-        //
-        // NOTE: this requires "Allow anonymous sign-ins" to be turned ON in
-        // Supabase → Authentication → Settings. Without that toggle, signInAnonymously()
-        // will fail and the status label will show a sign-in error.
         const supabaseUrl = 'https://uccdevvfexfpxnnwtpxa.supabase.co';
         const supabaseKey = 'sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_';
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
         async function connectToGame() {
             statusLabel.innerText = "Boarding...";
-
             let { data: { session } } = await supabaseClient.auth.getSession();
-
             if (!session) {
                 const { data, error } = await supabaseClient.auth.signInAnonymously();
-                if (error) {
-                    console.error("Anonymous sign-in failed:", error.message);
-                    statusLabel.innerText = "Sign-in failed: " + error.message;
-                    return;
-                }
+                if (error) { statusLabel.innerText = "Sign-in failed: " + error.message; return; }
                 session = data.session;
             }
-
-            socket = io(SERVER_URL, {
-                auth: { token: session.access_token }
-            });
-
+            socket = io(SERVER_URL, { auth: { token: session.access_token } });
             wireUpSocketListeners();
         }
 
-        // --- OPTIONAL: SAVE PROGRESS (upgrade anonymous session to a real account) ---
         function setupSaveProgressModal() {
             const savePill = document.getElementById('save-progress-btn');
             const saveOverlay = document.getElementById('saveProgressOverlay');
@@ -1590,31 +1195,19 @@
             const saveStatus = document.getElementById('saveProgressStatus');
             const saveConfirm = document.getElementById('saveProgressConfirm');
             const saveCancel = document.getElementById('saveProgressCancel');
-
             if (!savePill) return;
-
-            savePill.addEventListener('click', () => {
-                saveStatus.innerText = '';
-                saveOverlay.classList.add('show');
-            });
+            savePill.addEventListener('click', () => { saveStatus.innerText = ''; saveOverlay.classList.add('show'); });
             saveCancel.addEventListener('click', () => saveOverlay.classList.remove('show'));
-            saveOverlay.addEventListener('click', (e) => {
-                if (e.target === saveOverlay) saveOverlay.classList.remove('show');
-            });
+            saveOverlay.addEventListener('click', (e) => { if (e.target === saveOverlay) saveOverlay.classList.remove('show'); });
             saveConfirm.addEventListener('click', async () => {
                 const email = saveEmail.value.trim();
                 const password = savePassword.value;
-                if (!email || !password) {
-                    saveStatus.innerText = "Please enter both an email and a password.";
-                    return;
-                }
-                saveConfirm.disabled = true;
-                saveConfirm.innerText = "Saving...";
+                if (!email || !password) { saveStatus.innerText = "Please enter both an email and a password."; return; }
+                saveConfirm.disabled = true; saveConfirm.innerText = "Saving...";
                 const { error } = await supabaseClient.auth.updateUser({ email, password });
                 if (error) {
                     saveStatus.innerText = error.message;
-                    saveConfirm.disabled = false;
-                    saveConfirm.innerText = "Save account";
+                    saveConfirm.disabled = false; saveConfirm.innerText = "Save account";
                 } else {
                     saveStatus.style.color = "#34d399";
                     saveStatus.innerText = "Check your email to confirm — your progress is safe either way.";
