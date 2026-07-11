@@ -8,165 +8,265 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root {
-  --bg-deep: #060912;
-  --glass-bg: rgba(12, 20, 40, 0.55);
-  --glass-border: rgba(255,255,255,0.07);
-  --cyan: #00e5ff;
-  --green: #10b981;
-  --red: #ef4444;
-  --amber: #f59e0b;
-  --gold: #fbbf24;
-  --purple: #a855f7;
-  --text: #f8fafc;
-  --muted: #64748b;
+:root{
+  --bg:#060912;--glass:rgba(12,20,40,0.55);--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+  --cyan:#00e5ff;--green:#10b981;--red:#ef4444;--amber:#f59e0b;--gold:#fbbf24;
+  --purple:#a855f7;--blue:#3b82f6;--text:#f8fafc;--muted:#64748b;--surface:#0d1525;
 }
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Plus Jakarta Sans',sans-serif;-webkit-font-smoothing:antialiased;user-select:none;}
-body,html{width:100%;height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text);}
-
-/* ── VIEWPORT ── */
+body,html{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);}
 #gv{position:relative;width:100vw;height:100vh;display:grid;grid-template-rows:auto 1fr auto;}
 
 /* ── HEADER ── */
-header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:linear-gradient(to bottom,rgba(6,9,18,0.9),transparent);z-index:10;position:relative;}
-.brand{font-weight:800;font-size:1.1rem;letter-spacing:-0.3px;background:linear-gradient(90deg,#fff,#64748b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.ha{display:flex;align-items:center;gap:10px;flex-shrink:0;}
-.wallet{background:var(--glass-bg);border:1px solid var(--glass-border);backdrop-filter:blur(16px);padding:7px 14px;border-radius:99px;display:flex;align-items:center;gap:7px;font-weight:700;color:var(--green);font-size:0.9rem;white-space:nowrap;}
-#spb{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.25);color:var(--cyan);padding:7px 14px;border-radius:99px;font-weight:600;font-size:0.82rem;cursor:pointer;transition:all 0.2s;}
-#spb:hover{background:rgba(0,229,255,0.18);box-shadow:0 0 16px rgba(0,229,255,0.3);}
-@media(max-width:480px){.brand{font-size:0.8rem;} header{padding:10px 12px;} .spbl{display:none;} #spb{padding:7px 10px;}}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:linear-gradient(to bottom,rgba(6,9,18,0.92),transparent);z-index:10;}
+.brand{font-weight:800;font-size:1.05rem;letter-spacing:-0.3px;background:linear-gradient(90deg,#fff,#64748b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.ha{display:flex;align-items:center;gap:9px;flex-shrink:0;}
+/* Wallet pill — now clickable, opens wallet modal */
+#wallet-pill{background:var(--glass);border:1px solid rgba(16,185,129,0.35);backdrop-filter:blur(16px);padding:7px 13px;border-radius:99px;display:flex;align-items:center;gap:7px;font-weight:700;color:var(--green);font-size:0.88rem;white-space:nowrap;cursor:pointer;transition:all 0.2s;}
+#wallet-pill:hover{background:rgba(16,185,129,0.12);box-shadow:0 0 14px rgba(16,185,129,0.25);}
+#wallet-pill .live-dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:livepulse 2s infinite;}
+#deposit-btn{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(0,229,255,0.1));border:1px solid rgba(16,185,129,0.3);color:var(--green);padding:7px 13px;border-radius:99px;font-weight:700;font-size:0.8rem;cursor:pointer;transition:all 0.2s;}
+#deposit-btn:hover{background:linear-gradient(135deg,rgba(16,185,129,0.25),rgba(0,229,255,0.15));box-shadow:0 0 14px rgba(16,185,129,0.3);}
+@media(max-width:480px){.brand{font-size:0.78rem;}header{padding:10px 11px;}#wallet-pill svg{display:none;}#wallet-pill{padding:7px 9px;}}
 
 /* ── CANVAS ── */
 .cc{position:absolute;inset:0;z-index:1;}
 canvas{width:100%;height:100%;display:block;}
 
 /* ── HUD ── */
-.hud{position:absolute;inset:0;pointer-events:none;z-index:2;display:flex;flex-direction:column;align-items:center;padding-top:80px;}
-#mt{font-size:5rem;font-weight:900;letter-spacing:-3px;color:var(--text);transition:color 0.15s,text-shadow 0.15s;text-shadow:0 0 40px rgba(255,255,255,0.1);}
-#sl{font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:var(--muted);min-height:1.3em;margin-top:4px;}
-@media(max-width:640px){#mt{font-size:3.2rem;} .hud{padding-top:72px;}}
-
-/* milestone flash */
-#milestone-flash{position:absolute;top:18%;left:50%;transform:translateX(-50%) scale(0.8);background:linear-gradient(135deg,rgba(168,85,247,0.9),rgba(236,72,153,0.9));border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(12px);padding:10px 28px;border-radius:16px;font-size:1rem;font-weight:800;letter-spacing:1px;color:#fff;white-space:nowrap;opacity:0;pointer-events:none;z-index:60;transition:all 0.4s cubic-bezier(0.175,0.885,0.32,1.275);}
-#milestone-flash.show{opacity:1;transform:translateX(-50%) scale(1);}
-
-/* countdown ring */
-#cd{display:none;align-items:center;justify-content:center;flex-direction:column;margin-top:10px;}
+.hud{position:absolute;inset:0;pointer-events:none;z-index:2;display:flex;flex-direction:column;align-items:center;padding-top:76px;}
+#mt{font-size:4.8rem;font-weight:900;letter-spacing:-3px;color:var(--text);transition:color 0.15s,text-shadow 0.15s;}
+#sl{font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:var(--muted);min-height:1.3em;margin-top:4px;text-align:center;}
+@media(max-width:640px){#mt{font-size:3rem;}.hud{padding-top:68px;}}
+#mf{position:absolute;top:17%;left:50%;transform:translateX(-50%) scale(0.8);background:linear-gradient(135deg,rgba(168,85,247,0.92),rgba(236,72,153,0.92));border:1px solid rgba(255,255,255,0.25);backdrop-filter:blur(14px);padding:9px 26px;border-radius:16px;font-size:1rem;font-weight:800;color:#fff;white-space:nowrap;opacity:0;pointer-events:none;z-index:60;transition:all 0.35s cubic-bezier(0.175,0.885,0.32,1.275);}
+#mf.show{opacity:1;transform:translateX(-50%) scale(1);}
+#cd{display:none;align-items:center;justify-content:center;margin-top:8px;}
 #cd.vis{display:flex;}
 .cdw{position:relative;display:flex;align-items:center;justify-content:center;}
-#cdsvg{width:52px;height:52px;transform:rotate(-90deg);}
+#cdsvg{width:50px;height:50px;transform:rotate(-90deg);}
 #cdt{fill:none;stroke:rgba(255,255,255,0.06);stroke-width:4;}
 #cdf{fill:none;stroke:var(--cyan);stroke-width:4;stroke-linecap:round;stroke-dasharray:138.23;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear,stroke 0.3s;}
 #cdn{position:absolute;font-size:1.1rem;font-weight:900;color:var(--cyan);}
-
-/* win splash */
-#ws{position:absolute;top:28%;left:50%;transform:translate(-50%,-50%) scale(0.5);background:linear-gradient(135deg,rgba(16,185,129,0.9),rgba(5,150,105,0.95));backdrop-filter:blur(16px);padding:18px 36px;border-radius:24px;border:2px solid rgba(110,231,183,0.5);box-shadow:0 20px 60px rgba(16,185,129,0.5);text-align:center;opacity:0;pointer-events:none;z-index:50;transition:all 0.5s cubic-bezier(0.175,0.885,0.32,1.275);}
-#ws.show{transform:translate(-50%,-50%) scale(1);opacity:1;top:24%;}
-.wl{font-size:0.8rem;font-weight:800;color:#d1fae5;text-transform:uppercase;letter-spacing:3px;margin-bottom:4px;}
-.wa{font-size:2.4rem;font-weight:900;color:#fff;letter-spacing:-1px;text-shadow:0 4px 15px rgba(0,0,0,0.3);}
+#ws{position:absolute;top:28%;left:50%;transform:translate(-50%,-50%) scale(0.5);background:linear-gradient(135deg,rgba(16,185,129,0.92),rgba(5,150,105,0.96));backdrop-filter:blur(16px);padding:16px 34px;border-radius:22px;border:2px solid rgba(110,231,183,0.5);box-shadow:0 20px 60px rgba(16,185,129,0.5);text-align:center;opacity:0;pointer-events:none;z-index:50;transition:all 0.45s cubic-bezier(0.175,0.885,0.32,1.275);}
+#ws.show{transform:translate(-50%,-50%) scale(1);opacity:1;top:25%;}
+.wl{font-size:0.78rem;font-weight:800;color:#d1fae5;text-transform:uppercase;letter-spacing:3px;margin-bottom:3px;}
+.wa{font-size:2.3rem;font-weight:900;color:#fff;letter-spacing:-1px;}
 
 /* ── CONTROL BOARD ── */
-.cb{grid-row:3;z-index:10;padding:14px 16px;background:linear-gradient(to top,rgba(6,9,18,0.97),rgba(6,9,18,0.75));border-top:1px solid var(--glass-border);backdrop-filter:blur(24px);display:grid;grid-template-columns:1fr minmax(0,290px);gap:14px;}
-@media(max-width:640px){.cb{grid-template-columns:1fr;gap:10px;padding:10px 12px;} #mt{font-size:3rem;}}
-
-.bip{display:flex;flex-direction:column;gap:10px;min-width:0;}
-
-/* vehicle selector */
+.cb{grid-row:3;z-index:10;padding:13px 15px;background:linear-gradient(to top,rgba(6,9,18,0.97),rgba(6,9,18,0.78));border-top:1px solid var(--border);backdrop-filter:blur(24px);display:grid;grid-template-columns:1fr minmax(0,285px);gap:13px;}
+@media(max-width:640px){.cb{grid-template-columns:1fr;gap:9px;padding:9px 11px;}}
+.bip{display:flex;flex-direction:column;gap:9px;min-width:0;}
 .vs{position:relative;pointer-events:auto;}
-.vcb{display:flex;align-items:center;gap:10px;width:100%;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:12px;padding:10px 14px;cursor:pointer;transition:all 0.2s;color:var(--text);}
-.vcb:hover{border-color:rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);}
+.vcb{display:flex;align-items:center;gap:9px;width:100%;background:var(--glass);border:1px solid var(--border);border-radius:12px;padding:10px 13px;cursor:pointer;transition:all 0.2s;color:var(--text);}
+.vcb:hover{border-color:rgba(255,255,255,0.14);background:rgba(255,255,255,0.03);}
 .vcb.locked{cursor:not-allowed;opacity:0.55;}
-.ce{font-size:1.3rem;line-height:1;}
+.ce{font-size:1.25rem;line-height:1;}
 .clg{display:flex;flex-direction:column;align-items:flex-start;flex:1;min-width:0;}
-.cey{font-size:0.6rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:700;}
-.cn{font-size:0.88rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cc2{color:var(--muted);transition:transform 0.2s;flex-shrink:0;}
-.vs.open .cc2{transform:rotate(180deg);}
-.vp{position:absolute;bottom:calc(100% + 8px);left:0;right:0;background:rgba(10,18,38,0.98);backdrop-filter:blur(24px);border:1px solid var(--glass-border);border-radius:14px;padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;z-index:60;box-shadow:0 24px 48px rgba(0,0,0,0.7);opacity:0;transform:translateY(6px) scale(0.97);pointer-events:none;transition:opacity 0.16s,transform 0.16s;}
+.cey{font-size:0.58rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:700;}
+.cn{font-size:0.86rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chev{color:var(--muted);transition:transform 0.2s;flex-shrink:0;}
+.vs.open .chev{transform:rotate(180deg);}
+.vp{position:absolute;bottom:calc(100% + 7px);left:0;right:0;background:rgba(8,14,32,0.98);backdrop-filter:blur(24px);border:1px solid var(--border);border-radius:13px;padding:7px;display:grid;grid-template-columns:repeat(3,1fr);gap:5px;z-index:60;box-shadow:0 24px 48px rgba(0,0,0,0.75);opacity:0;transform:translateY(6px) scale(0.97);pointer-events:none;transition:opacity 0.15s,transform 0.15s;}
 .vp.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
-.vo{background:rgba(255,255,255,0.02);border:1px solid var(--glass-border);border-radius:10px;padding:10px 6px;text-align:center;cursor:pointer;transition:all 0.2s;}
-.vo:hover{border-color:rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);}
-.vo.active{border-color:var(--cyan);background:rgba(0,229,255,0.1);box-shadow:0 0 14px rgba(0,229,255,0.18);}
-.vn{font-size:0.7rem;font-weight:700;display:block;margin-top:4px;}
-
-/* input row */
-.ir{display:flex;gap:10px;pointer-events:auto;}
+.vo{background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:9px;padding:9px 5px;text-align:center;cursor:pointer;transition:all 0.18s;}
+.vo:hover{border-color:rgba(255,255,255,0.16);background:rgba(255,255,255,0.04);}
+.vo.active{border-color:var(--cyan);background:rgba(0,229,255,0.09);box-shadow:0 0 14px rgba(0,229,255,0.18);}
+.vn{font-size:0.68rem;font-weight:700;display:block;margin-top:3px;}
+.ir{display:flex;gap:9px;pointer-events:auto;}
 .aiw{position:relative;flex:1;min-width:0;}
-.aiw span{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-weight:700;color:var(--muted);}
-.bif{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--glass-border);border-radius:12px;padding:13px 12px 13px 38px;color:#fff;font-size:1rem;font-weight:700;outline:none;transition:border-color 0.2s;}
+.aiw span{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-weight:700;color:var(--muted);}
+.bif{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:11px;padding:12px 11px 12px 36px;color:#fff;font-size:0.98rem;font-weight:700;outline:none;transition:border-color 0.2s;}
 .bif:focus{border-color:rgba(255,255,255,0.2);}
-.ab{flex-shrink:0;border:none;border-radius:12px;font-size:0.88rem;font-weight:800;letter-spacing:-0.2px;cursor:pointer;transition:all 0.2s cubic-bezier(0.4,0,0.2,1);color:#fff;padding:13px 16px;white-space:nowrap;}
+.ab{flex-shrink:0;border:none;border-radius:11px;font-size:0.86rem;font-weight:800;cursor:pointer;transition:all 0.2s cubic-bezier(0.4,0,0.2,1);color:#fff;padding:12px 15px;white-space:nowrap;}
 .bbet{background:linear-gradient(135deg,#2563eb,#1d4ed8);box-shadow:0 4px 16px rgba(37,99,235,0.45);}
 .bbet:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(37,99,235,0.65);}
 .bco{background:linear-gradient(135deg,#10b981,#047857);box-shadow:0 4px 16px rgba(16,185,129,0.45);}
 .bco:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(16,185,129,0.65);}
 .bdis{background:#111827!important;color:var(--muted)!important;cursor:not-allowed!important;box-shadow:none!important;transform:none!important;}
-@media(max-width:400px){.ab{font-size:0.78rem;padding:11px 10px;}}
+@media(max-width:400px){.ab{font-size:0.76rem;padding:11px 9px;}}
+.lp{background:rgba(0,0,0,0.22);border:1px solid var(--border);border-radius:13px;padding:11px;display:flex;flex-direction:column;pointer-events:auto;min-width:0;}
+.lt{font-size:0.68rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:7px;font-weight:700;}
+.ls{flex:1;overflow-y:auto;max-height:85px;display:flex;flex-direction:column;gap:4px;}
+.le{font-size:0.76rem;display:flex;gap:5px;animation:fadeIn 0.22s ease-out;}
+@media(max-width:640px){.ls{max-height:52px;}.lp{padding:8px;}}
 
-/* ledger */
-.lp{background:rgba(0,0,0,0.25);border:1px solid var(--glass-border);border-radius:14px;padding:12px;display:flex;flex-direction:column;pointer-events:auto;min-width:0;}
-.lt{font-size:0.7rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px;font-weight:700;}
-.ls{flex:1;overflow-y:auto;max-height:88px;display:flex;flex-direction:column;gap:5px;}
-.le{font-size:0.78rem;display:flex;gap:6px;animation:fadeIn 0.25s ease-out;}
-@media(max-width:640px){.ls{max-height:56px;} .lp{padding:8px;}}
-
-/* toast */
-#ct{position:absolute;top:30%;left:50%;transform:translate(-50%,-50%) scale(0.9);background:rgba(16,185,129,0.95);border:1px solid rgba(255,255,255,0.2);backdrop-filter:blur(16px);padding:18px 38px;border-radius:20px;text-align:center;z-index:100;opacity:0;pointer-events:none;transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 20px 40px rgba(0,0,0,0.6);}
+/* ── TOAST ── */
+#ct{position:absolute;top:30%;left:50%;transform:translate(-50%,-50%) scale(0.9);background:rgba(16,185,129,0.95);border:1px solid rgba(255,255,255,0.2);backdrop-filter:blur(16px);padding:16px 36px;border-radius:18px;text-align:center;z-index:100;opacity:0;pointer-events:none;transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 20px 40px rgba(0,0,0,0.6);}
 #ct.vis{opacity:1;transform:translate(-50%,-50%) scale(1);}
 
-/* save modal */
-.spo{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:opacity 0.25s,visibility 0.25s;}
-.spo.show{opacity:1;visibility:visible;}
-.spm{background:#0d1525;border:1px solid var(--glass-border);border-radius:20px;padding:26px;width:min(350px,90vw);box-shadow:0 30px 60px rgba(0,0,0,0.7);}
-.spm h3{margin-bottom:8px;font-size:1.1rem;}
-.spm p{color:var(--muted);font-size:0.82rem;margin-bottom:14px;line-height:1.4;}
-.spm input{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--glass-border);border-radius:10px;padding:11px 14px;color:#fff;font-size:0.9rem;margin-bottom:8px;outline:none;}
-.sps{font-size:0.8rem;color:var(--amber);min-height:14px;margin-bottom:8px;}
-.spm button{width:100%;border:none;border-radius:10px;padding:11px;font-weight:700;cursor:pointer;margin-bottom:6px;}
-#spc{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;}
-#spca{background:transparent;color:var(--muted);}
+/* ══════════════════════════════════════════
+   WALLET MODAL
+══════════════════════════════════════════ */
+.w-overlay{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center;padding:0;opacity:0;visibility:hidden;transition:opacity 0.25s,visibility 0.25s;}
+.w-overlay.show{opacity:1;visibility:visible;}
+@media(min-width:520px){.w-overlay{align-items:center;padding:16px;}}
+.w-modal{background:var(--surface);border:1px solid var(--border2);border-radius:24px 24px 0 0;width:100%;max-width:440px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 -20px 60px rgba(0,0,0,0.8);transform:translateY(30px);transition:transform 0.3s cubic-bezier(0.175,0.885,0.32,1.275);}
+@media(min-width:520px){.w-modal{border-radius:24px;transform:translateY(20px) scale(0.97);}}
+.w-overlay.show .w-modal{transform:translateY(0) scale(1);}
+.w-drag{width:40px;height:4px;background:rgba(255,255,255,0.15);border-radius:4px;margin:10px auto 0;}
+@media(min-width:520px){.w-drag{display:none;}}
+.w-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 0;}
+.w-title{font-size:1rem;font-weight:800;}
+.w-close{width:30px;height:30px;border-radius:99px;background:rgba(255,255,255,0.06);border:none;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all 0.2s;}
+.w-close:hover{background:rgba(255,255,255,0.12);color:var(--text);}
 
-/* ── combo multiplier UI ── */
-#combo{position:absolute;top:9%;right:5%;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);border-radius:12px;padding:8px 14px;text-align:center;opacity:0;pointer-events:none;z-index:40;transition:opacity 0.3s;}
-#combo.show{opacity:1;}
-#combo .combo-label{font-size:0.6rem;text-transform:uppercase;letter-spacing:2px;color:rgba(168,85,247,0.8);font-weight:700;}
-#combo .combo-val{font-size:1.5rem;font-weight:900;color:#c084fc;line-height:1;}
+/* balance hero */
+.w-balance{margin:14px 18px;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(0,229,255,0.07));border:1px solid rgba(16,185,129,0.18);border-radius:16px;padding:16px;text-align:center;position:relative;overflow:hidden;}
+.w-balance::before{content:'';position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:radial-gradient(circle,rgba(16,185,129,0.12),transparent 70%);border-radius:50%;}
+.w-bal-eye{font-size:0.62rem;text-transform:uppercase;letter-spacing:2.5px;color:var(--muted);font-weight:700;margin-bottom:4px;}
+.w-bal-amt{font-family:'Sora',sans-serif;font-size:2.5rem;font-weight:800;letter-spacing:-1px;line-height:1;}
+.w-bal-amt span{font-size:1.1rem;color:var(--muted);font-weight:600;}
+.w-bal-sub{font-size:0.68rem;color:var(--muted);margin-top:5px;display:flex;align-items:center;justify-content:center;gap:5px;}
+.w-bal-sub .live-dot{width:5px;height:5px;background:var(--green);border-radius:50%;animation:livepulse 2s infinite;}
+
+/* quick actions */
+.w-qa{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 18px 14px;}
+.w-qa-btn{border:none;border-radius:12px;padding:13px;cursor:pointer;font-weight:800;font-size:0.85rem;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:7px;color:#fff;}
+.w-qa-dep{background:linear-gradient(135deg,#10b981,#047857);box-shadow:0 4px 14px rgba(16,185,129,0.35);}
+.w-qa-dep:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(16,185,129,0.5);}
+.w-qa-wd{background:linear-gradient(135deg,#3b82f6,#1d4ed8);box-shadow:0 4px 14px rgba(59,130,246,0.35);}
+.w-qa-wd:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,0.5);}
+
+/* tabs */
+.w-tabs{display:flex;margin:0 18px;border-bottom:1px solid var(--border);gap:2px;}
+.w-tab{flex:1;padding:9px;border:none;background:transparent;color:var(--muted);font-weight:700;font-size:0.75rem;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;margin-bottom:-1px;}
+.w-tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+.w-body{padding:14px 18px 18px;overflow-y:auto;flex:1;}
+.w-panel{display:none;}
+.w-panel.active{display:block;}
+
+/* form fields */
+.f-label{font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:5px;display:block;}
+.f-input{width:100%;background:rgba(0,0,0,0.32);border:1px solid var(--border);border-radius:11px;padding:12px 13px;color:var(--text);font-size:0.95rem;font-weight:600;outline:none;transition:border-color 0.2s,box-shadow 0.2s;margin-bottom:11px;}
+.f-input:focus{border-color:rgba(0,229,255,0.35);box-shadow:0 0 0 3px rgba(0,229,255,0.06);}
+.f-input::placeholder{color:var(--muted);font-weight:500;}
+.f-amt-wrap{position:relative;margin-bottom:11px;}
+.f-amt-pre{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-weight:800;color:var(--muted);font-size:0.88rem;pointer-events:none;}
+.f-input.has-pre{padding-left:40px;margin-bottom:0;}
+
+/* network grid */
+.net-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:11px;}
+.net-opt{border:1px solid var(--border);border-radius:11px;padding:10px;cursor:pointer;transition:all 0.2s;background:rgba(255,255,255,0.02);display:flex;align-items:center;gap:9px;}
+.net-opt:hover{border-color:rgba(255,255,255,0.14);background:rgba(255,255,255,0.04);}
+.net-opt.sel{border-color:var(--cyan);background:rgba(0,229,255,0.08);box-shadow:0 0 10px rgba(0,229,255,0.12);}
+.net-icon{width:34px;height:34px;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:0.9rem;font-weight:800;flex-shrink:0;}
+.ni-air{background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;}
+.ni-mtn{background:linear-gradient(135deg,#fbbf24,#d97706);color:#1a0a00;}
+.ni-zam{background:linear-gradient(135deg,#16a34a,#166534);color:#fff;}
+.net-name{font-size:0.82rem;font-weight:700;}
+.net-sub{font-size:0.62rem;color:var(--muted);margin-top:1px;}
+
+/* chips */
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:11px;}
+.chip{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:7px;padding:5px 11px;font-size:0.75rem;font-weight:700;cursor:pointer;transition:all 0.16s;color:var(--muted);}
+.chip:hover{border-color:rgba(255,255,255,0.18);color:var(--text);}
+.chip.sel{border-color:var(--cyan);color:var(--cyan);background:rgba(0,229,255,0.07);}
+
+/* fee box */
+.fee-box{background:rgba(0,0,0,0.22);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:11px;display:none;}
+.fee-box.show{display:block;}
+.fee-row{display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:5px;}
+.fee-row:last-child{margin-bottom:0;padding-top:5px;border-top:1px solid var(--border);font-weight:700;font-size:0.8rem;}
+.fee-lbl{color:var(--muted);}
+.fee-val{color:var(--text);}
+.fee-val.tot{color:var(--green);}
+
+/* USSD box */
+.ussd-box{background:rgba(0,0,0,0.28);border:1px solid rgba(251,191,36,0.28);border-radius:13px;padding:14px;margin-bottom:11px;text-align:center;display:none;}
+.ussd-box.show{display:block;}
+.ussd-title{font-size:0.65rem;text-transform:uppercase;letter-spacing:2px;color:var(--amber);font-weight:700;margin-bottom:7px;}
+.ussd-msg{font-size:0.82rem;color:var(--muted);line-height:1.5;}
+.ussd-msg strong{color:var(--text);}
+.ussd-timer{margin-top:9px;font-size:0.7rem;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;}
+.timer-bar{flex:1;height:3px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;}
+.timer-fill{height:100%;background:var(--amber);border-radius:3px;transition:width 1s linear;}
+
+/* status msg */
+.s-msg{border-radius:11px;padding:11px 13px;font-size:0.8rem;font-weight:600;margin-bottom:11px;display:none;align-items:center;gap:7px;}
+.s-msg.show{display:flex;}
+.s-msg.pending{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.22);color:var(--amber);}
+.s-msg.success{background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.22);color:var(--green);}
+.s-msg.error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.22);color:var(--red);}
+.spinner{width:15px;height:15px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;}
+
+/* warn */
+.f-warn{font-size:0.68rem;color:var(--muted);margin-top:4px;min-height:14px;}
+.f-warn.over{color:var(--red);}
+
+/* submit btn */
+.w-btn{width:100%;border:none;border-radius:12px;padding:14px;font-weight:800;font-size:0.95rem;cursor:pointer;transition:all 0.2s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;justify-content:center;gap:7px;color:#fff;}
+.w-btn:disabled{background:#111827!important;color:var(--muted)!important;cursor:not-allowed!important;box-shadow:none!important;transform:none!important;}
+.w-btn-dep{background:linear-gradient(135deg,#10b981,#047857);box-shadow:0 4px 16px rgba(16,185,129,0.4);}
+.w-btn-dep:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(16,185,129,0.55);}
+.w-btn-wd{background:linear-gradient(135deg,#3b82f6,#1d4ed8);box-shadow:0 4px 16px rgba(59,130,246,0.4);}
+.w-btn-wd:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(59,130,246,0.55);}
+
+/* transaction list */
+.tx-list{display:flex;flex-direction:column;gap:7px;}
+.tx-item{background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:11px;padding:11px 13px;display:flex;align-items:center;gap:11px;}
+.tx-icon{width:34px;height:34px;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0;}
+.tx-icon.deposit{background:rgba(16,185,129,0.14);}
+.tx-icon.withdraw{background:rgba(59,130,246,0.14);}
+.tx-icon.win{background:rgba(168,85,247,0.14);}
+.tx-icon.bet,.tx-icon.loss{background:rgba(245,158,11,0.1);}
+.tx-info{flex:1;min-width:0;}
+.tx-lbl{font-size:0.82rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tx-meta{font-size:0.65rem;color:var(--muted);margin-top:2px;}
+.tx-amt{font-size:0.88rem;font-weight:800;text-align:right;flex-shrink:0;}
+.tx-amt.pos{color:var(--green);}
+.tx-amt.neg{color:var(--red);}
+.tx-st{font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-top:2px;text-align:right;}
+.tx-st.completed{color:var(--green);}
+.tx-st.pending{color:var(--amber);}
+.tx-st.failed,.tx-st.lost{color:var(--red);}
+.tx-empty{text-align:center;padding:28px 16px;color:var(--muted);}
+.tx-empty .ei{font-size:2rem;margin-bottom:9px;opacity:0.35;}
+.tx-empty p{font-size:0.8rem;line-height:1.5;}
+
+/* low balance nudge */
+.low-bal-nudge{background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:11px;padding:11px 13px;margin-bottom:11px;display:none;gap:9px;align-items:flex-start;}
+.low-bal-nudge.show{display:flex;}
+.low-bal-nudge p{font-size:0.75rem;color:var(--amber);line-height:1.4;}
+.low-bal-nudge button{margin-top:5px;background:rgba(245,158,11,0.2);border:1px solid rgba(245,158,11,0.35);color:var(--amber);border-radius:7px;padding:4px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap;}
+
+/* responsible gaming footer */
+.rg-foot{margin:10px 18px 16px;background:rgba(0,0,0,0.18);border-radius:9px;padding:9px 11px;display:flex;align-items:center;gap:7px;}
+.rg-foot p{font-size:0.6rem;color:var(--muted);line-height:1.4;}
 
 @keyframes fadeIn{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:translateY(0);}}
-@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.04);}}
-@keyframes shimmer{0%{background-position:-200% center;}100%{background-position:200% center;}}
+@keyframes livepulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(0.8);}}
+@keyframes spin{to{transform:rotate(360deg);}}
 @keyframes screenShake{0%,100%{transform:translate(0,0);}20%{transform:translate(-3px,2px);}40%{transform:translate(3px,-2px);}60%{transform:translate(-2px,3px);}80%{transform:translate(2px,-1px);}}
 
-/* ══════════════ INTRO ══════════════ */
+/* ── INTRO ── */
 .is{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(ellipse 80% 60% at 50% 18%,#1e1b4b 0%,#0b1020 48%,#03040a 100%);cursor:pointer;transition:opacity 0.7s,visibility 0.7s;}
 .is.ih{opacity:0;visibility:hidden;pointer-events:none;}
 .istar{position:absolute;background:#fff;border-radius:50%;opacity:0.4;animation:isTwinkle 2.8s ease-in-out infinite;}
-.icl{position:absolute;width:260px;height:90px;background:radial-gradient(circle,rgba(255,255,255,0.05),transparent 70%);border-radius:50%;filter:blur(8px);}
-.icl1{top:14%;left:-22%;animation:isCloudDrift 18s linear infinite;}
-.icl2{top:65%;left:-28%;animation:isCloudDrift 24s linear infinite;animation-delay:5s;}
-.ic{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px;}
-.iev{font-family:'Inter',sans-serif;font-size:0.68rem;letter-spacing:3px;font-weight:600;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:14px;opacity:0;animation:isReveal 0.8s ease forwards 0.15s;}
-.bw{position:relative;width:clamp(110px,28vw,165px);margin-bottom:4px;opacity:0;animation:isBalloonRise 1.3s cubic-bezier(0.2,0.8,0.2,1) forwards;}
+.icl{position:absolute;width:250px;height:85px;background:radial-gradient(circle,rgba(255,255,255,0.05),transparent 70%);border-radius:50%;filter:blur(8px);}
+.icl1{top:14%;left:-20%;animation:isCloudDrift 17s linear infinite;}
+.icl2{top:64%;left:-28%;animation:isCloudDrift 23s linear infinite;animation-delay:5s;}
+.ic{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:22px;}
+.iev{font-family:'Inter',sans-serif;font-size:0.67rem;letter-spacing:3px;font-weight:600;text-transform:uppercase;color:rgba(255,255,255,0.32);margin-bottom:13px;opacity:0;animation:isReveal 0.8s ease forwards 0.15s;}
+.bw{position:relative;width:clamp(105px,27vw,158px);margin-bottom:4px;opacity:0;animation:isBalloonRise 1.3s cubic-bezier(0.2,0.8,0.2,1) forwards;}
 .bw svg{width:100%;display:block;animation:isBalloonBob 4.6s ease-in-out infinite 1.3s;transform-origin:50% 78%;}
-.bglow{position:absolute;bottom:-8px;left:50%;width:70%;height:28px;transform:translateX(-50%);background:radial-gradient(ellipse,rgba(251,191,36,0.4),transparent 70%);filter:blur(10px);border-radius:50%;}
+.bglow{position:absolute;bottom:-8px;left:50%;width:70%;height:26px;transform:translateX(-50%);background:radial-gradient(ellipse,rgba(251,191,36,0.38),transparent 70%);filter:blur(9px);border-radius:50%;}
 .bflame{animation:isFlameFlick 0.55s ease-in-out infinite;transform-origin:50% 100%;}
-.it{margin:14px 0 6px;font-family:'Sora',sans-serif;line-height:1.05;}
-.itl{display:block;opacity:0;transform:translateY(14px);animation:isReveal 0.7s ease forwards;}
-.itl1{font-size:clamp(0.9rem,3vw,1.15rem);letter-spacing:6px;color:rgba(255,255,255,0.5);font-weight:700;animation-delay:1.5s;}
-.itl2{font-size:clamp(1.9rem,6.5vw,3.1rem);letter-spacing:0.5px;font-weight:800;background:linear-gradient(135deg,#fde68a,#fbbf24 45%,#34d399);-webkit-background-clip:text;background-clip:text;color:transparent;animation-delay:1.7s;}
-.itag{font-family:'Inter',sans-serif;font-size:0.9rem;color:rgba(255,255,255,0.45);margin:4px 0 24px;opacity:0;animation:isReveal 0.7s ease forwards 1.95s;}
-.iboard{display:flex;align-items:center;gap:10px;opacity:0;animation:isReveal 0.6s ease forwards 2.2s;}
-.idot{width:6px;height:6px;border-radius:50%;background:#fbbf24;animation:isDotPulse 1.2s ease-in-out infinite;}
+.it{margin:13px 0 5px;font-family:'Sora',sans-serif;line-height:1.05;}
+.itl{display:block;opacity:0;transform:translateY(13px);animation:isReveal 0.7s ease forwards;}
+.itl1{font-size:clamp(0.88rem,2.8vw,1.12rem);letter-spacing:6px;color:rgba(255,255,255,0.48);font-weight:700;animation-delay:1.5s;}
+.itl2{font-size:clamp(1.85rem,6.2vw,3rem);letter-spacing:0.5px;font-weight:800;background:linear-gradient(135deg,#fde68a,#fbbf24 45%,#34d399);-webkit-background-clip:text;background-clip:text;color:transparent;animation-delay:1.7s;}
+.itag{font-family:'Inter',sans-serif;font-size:0.88rem;color:rgba(255,255,255,0.42);margin:4px 0 22px;opacity:0;animation:isReveal 0.7s ease forwards 1.95s;}
+.iboard{display:flex;align-items:center;gap:9px;opacity:0;animation:isReveal 0.6s ease forwards 2.2s;}
+.idot{width:5px;height:5px;border-radius:50%;background:#fbbf24;animation:isDotPulse 1.2s ease-in-out infinite;}
 .idot:nth-child(2){animation-delay:0.15s;}.idot:nth-child(3){animation-delay:0.3s;}
-.ibt{font-family:'Inter',sans-serif;font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);}
-.ipw{margin-top:20px;display:flex;flex-direction:column;align-items:center;gap:7px;opacity:0;animation:isReveal 0.6s ease forwards 2.5s;}
-.ipr{width:clamp(150px,38vw,210px);height:4px;border-radius:4px;background:rgba(255,255,255,0.07);overflow:hidden;}
-.ipf{height:100%;width:0%;border-radius:4px;background:linear-gradient(90deg,#fbbf24,#34d399);transition:width 0.3s linear;}
-.ipp{font-family:'Inter',sans-serif;font-size:0.66rem;letter-spacing:1.5px;color:rgba(255,255,255,0.3);font-weight:600;}
-.itip{margin-top:14px;min-height:14px;font-family:'Inter',sans-serif;font-size:0.75rem;color:rgba(255,255,255,0.4);opacity:0;animation:isReveal 0.6s ease forwards 2.7s;transition:opacity 0.3s;}
-.ift{position:absolute;bottom:24px;left:0;right:0;text-align:center;font-family:'Inter',sans-serif;font-size:0.67rem;letter-spacing:2.5px;text-transform:uppercase;color:rgba(255,255,255,0.25);font-weight:600;opacity:0;animation:isReveal 0.6s ease forwards 2.4s;}
+.ibt{font-family:'Inter',sans-serif;font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.32);}
+.ipw{margin-top:18px;display:flex;flex-direction:column;align-items:center;gap:6px;opacity:0;animation:isReveal 0.6s ease forwards 2.5s;}
+.ipr{width:clamp(145px,37vw,205px);height:3px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;}
+.ipf{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#fbbf24,#34d399);transition:width 0.3s linear;}
+.ipp{font-family:'Inter',sans-serif;font-size:0.63rem;letter-spacing:1.5px;color:rgba(255,255,255,0.28);font-weight:600;}
+.itip{margin-top:13px;min-height:13px;font-family:'Inter',sans-serif;font-size:0.73rem;color:rgba(255,255,255,0.38);opacity:0;animation:isReveal 0.6s ease forwards 2.7s;transition:opacity 0.3s;}
+.ift{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-family:'Inter',sans-serif;font-size:0.65rem;letter-spacing:2.5px;text-transform:uppercase;color:rgba(255,255,255,0.22);font-weight:600;opacity:0;animation:isReveal 0.6s ease forwards 2.4s;}
 @keyframes isBalloonRise{0%{opacity:0;transform:translateY(120px) scale(0.85);}70%{opacity:1;transform:translateY(-8px) scale(1.02);}100%{opacity:1;transform:translateY(0) scale(1);}}
 @keyframes isBalloonBob{0%,100%{transform:translateY(0) rotate(-1.2deg);}50%{transform:translateY(-12px) rotate(1.2deg);}}
 @keyframes isFlameFlick{0%,100%{opacity:0.85;transform:scaleY(1);}50%{opacity:1;transform:scaleY(1.2);}}
@@ -178,8 +278,8 @@ canvas{width:100%;height:100%;display:block;}
 </head>
 <body>
 
-<!-- ══ INTRO ══ -->
-<div id="IS" class="is" role="img" aria-label="Kwacha Balloon Arena loading">
+<!-- INTRO -->
+<div id="IS" class="is">
   <div class="istar" style="top:9%;left:13%;width:2px;height:2px;"></div>
   <div class="istar" style="top:21%;left:77%;width:3px;height:3px;animation-delay:0.4s;"></div>
   <div class="istar" style="top:7%;left:47%;width:2px;height:2px;animation-delay:0.8s;"></div>
@@ -188,7 +288,6 @@ canvas{width:100%;height:100%;display:block;}
   <div class="istar" style="top:39%;left:7%;animation-delay:0.6s;"></div>
   <div class="istar" style="top:5%;left:64%;animation-delay:1.4s;"></div>
   <div class="istar" style="top:27%;left:57%;animation-delay:0.2s;"></div>
-  <div class="istar" style="top:44%;left:38%;width:2px;height:2px;animation-delay:1s;"></div>
   <div class="icl icl1"></div><div class="icl icl2"></div>
   <div class="ic">
     <div class="iev">Vyeta Digital Solutions Presents</div>
@@ -202,16 +301,11 @@ canvas{width:100%;height:100%;display:block;}
           <clipPath id="iBC"><path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z"/></clipPath>
         </defs>
         <g clip-path="url(#iBC)">
-          <rect x="0" y="0" width="22" height="240" fill="url(#iG)"/>
-          <rect x="22" y="0" width="22" height="240" fill="url(#iGn)"/>
-          <rect x="44" y="0" width="22" height="240" fill="url(#iG)"/>
-          <rect x="66" y="0" width="22" height="240" fill="url(#iGn)"/>
-          <rect x="88" y="0" width="22" height="240" fill="url(#iG)"/>
-          <rect x="110" y="0" width="22" height="240" fill="url(#iGn)"/>
-          <rect x="132" y="0" width="22" height="240" fill="url(#iG)"/>
-          <rect x="154" y="0" width="22" height="240" fill="url(#iGn)"/>
-          <rect x="176" y="0" width="22" height="240" fill="url(#iG)"/>
-          <rect x="198" y="0" width="22" height="240" fill="url(#iGn)"/>
+          <rect x="0" y="0" width="22" height="240" fill="url(#iG)"/><rect x="22" y="0" width="22" height="240" fill="url(#iGn)"/>
+          <rect x="44" y="0" width="22" height="240" fill="url(#iG)"/><rect x="66" y="0" width="22" height="240" fill="url(#iGn)"/>
+          <rect x="88" y="0" width="22" height="240" fill="url(#iG)"/><rect x="110" y="0" width="22" height="240" fill="url(#iGn)"/>
+          <rect x="132" y="0" width="22" height="240" fill="url(#iG)"/><rect x="154" y="0" width="22" height="240" fill="url(#iGn)"/>
+          <rect x="176" y="0" width="22" height="240" fill="url(#iG)"/><rect x="198" y="0" width="22" height="240" fill="url(#iGn)"/>
         </g>
         <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z" fill="url(#iSh)"/>
         <path d="M110 10 C40 10 20 90 20 130 C20 190 60 220 110 235 C160 220 200 190 200 130 C200 90 180 10 110 10 Z" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="2"/>
@@ -236,31 +330,34 @@ canvas{width:100%;height:100%;display:block;}
   </div>
   <div class="ift">Powered by Vyeta</div>
 </div>
-
 <script>
 (function(){
   var el=document.getElementById('IS');if(!el)return;
   var fill=document.getElementById('IPF'),pct=document.getElementById('IPP'),tip=document.getElementById('ITIP');
-  var MS=7200,tips=["Tip: Cash out before the balloon drifts away.","Tip: Bigger multiplier = bigger risk and reward.","Tip: Set your target before take-off.","Calibrating flight instruments...","Syncing live flight data...","Tip: A sure win beats a missed one every time."];
+  var MS=6500,tips=["Tip: Cash out before the balloon drifts away.","Tip: Bigger multiplier = bigger risk.","Tip: Set your target before take-off.","Calibrating flight instruments...","Syncing live flight data...","Tip: A sure win beats a missed one."];
   var ti=0,t0=Date.now();
   var pi=setInterval(function(){var p=Math.min(100,Math.round((Date.now()-t0)/MS*100));fill.style.width=p+'%';pct.textContent=p+'%';if(p>=100)clearInterval(pi);},80);
-  var ti2=setInterval(function(){ti=(ti+1)%tips.length;tip.style.opacity=0;setTimeout(function(){tip.textContent=tips[ti];tip.style.opacity=1;},250);},1500);
+  var ti2=setInterval(function(){ti=(ti+1)%tips.length;tip.style.opacity=0;setTimeout(function(){tip.textContent=tips[ti];tip.style.opacity=1;},220);},1400);
   function dismiss(){clearInterval(pi);clearInterval(ti2);el.classList.add('ih');setTimeout(function(){el.remove();},700);}
   var at=setTimeout(dismiss,MS);
   el.addEventListener('click',function(){clearTimeout(at);dismiss();});
 })();
 </script>
 
-<!-- ══ GAME ══ -->
+<!-- GAME -->
 <div id="gv">
   <header>
     <div class="brand">KWACHA BALLOON ADVENTURES</div>
     <div class="ha">
-      <div class="wallet" id="BP">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h4v-6Z"/></svg>
+      <div id="wallet-pill" onclick="openWallet()">
+        <span class="live-dot"></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h4v-6Z"/></svg>
         <span id="BD">ZK 0.00</span>
       </div>
-      <button id="spb"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span class="spbl">Save Progress</span></button>
+      <button id="deposit-btn" onclick="openWallet('deposit')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        Deposit
+      </button>
     </div>
   </header>
 
@@ -270,23 +367,34 @@ canvas{width:100%;height:100%;display:block;}
     <div style="text-align:center;">
       <div id="mt">1.00x</div>
       <div id="sl">Connecting...</div>
-      <div id="cd"><div class="cdw"><svg id="cdsvg" viewBox="0 0 56 56"><circle id="cdt" cx="28" cy="28" r="22"/><circle id="cdf" cx="28" cy="28" r="22"/></svg><span id="cdn">5</span></div></div>
+      <div id="cd"><div class="cdw">
+        <svg id="cdsvg" viewBox="0 0 56 56"><circle id="cdt" cx="28" cy="28" r="22"/><circle id="cdf" cx="28" cy="28" r="22"/></svg>
+        <span id="cdn">7</span>
+      </div></div>
     </div>
   </div>
 
-  <div id="milestone-flash">🔥 2x MILESTONE!</div>
-  <div id="combo"><div class="combo-label">Altitude Bonus</div><div class="combo-val" id="combo-val">x1.0</div></div>
-
+  <div id="mf">🚀 MILESTONE!</div>
   <div id="ws"><div class="wl">Cash Secured</div><div id="wsa" class="wa">+ ZK 0.00</div></div>
 
   <div class="cb">
     <div class="bip">
+      <!-- Low balance nudge -->
+      <div class="low-bal-nudge" id="low-nudge">
+        <span>⚠️</span>
+        <div><p><strong>Low balance.</strong> Top up to keep playing.</p>
+        <button onclick="openWallet('deposit')">Deposit now</button></div>
+      </div>
       <div class="vs" id="VS">
-        <button type="button" class="vcb" id="VCB"><span class="ce" id="CE">🎈</span><span class="clg"><span class="cey">Craft</span><span class="cn" id="VN">Kwacha Balloon</span></span><svg class="cc2" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>
+        <button type="button" class="vcb" id="VCB">
+          <span class="ce" id="CE">🎈</span>
+          <span class="clg"><span class="cey">Craft</span><span class="cn" id="VN">Kwacha Balloon</span></span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
         <div class="vp" id="VP">
-          <div class="vo active" data-v="balloon" data-e="🎈" data-n="Kwacha Balloon"><span style="font-size:1.3rem;">🎈</span><span class="vn">Kwacha Balloon</span></div>
-          <div class="vo" data-v="lwango" data-e="🧺" data-n="Traditional Lwango"><span style="font-size:1.3rem;">🧺</span><span class="vn">Traditional Lwango</span></div>
-          <div class="vo" data-v="broom" data-e="🧹" data-n="Mystic Broomstick"><span style="font-size:1.3rem;">🧹</span><span class="vn">Mystic Broomstick</span></div>
+          <div class="vo active" data-v="balloon" data-e="🎈" data-n="Kwacha Balloon"><span style="font-size:1.25rem">🎈</span><span class="vn">Kwacha Balloon</span></div>
+          <div class="vo" data-v="lwango" data-e="🧺" data-n="Traditional Lwango"><span style="font-size:1.25rem">🧺</span><span class="vn">Traditional Lwango</span></div>
+          <div class="vo" data-v="broom" data-e="🧹" data-n="Mystic Broomstick"><span style="font-size:1.25rem">🧹</span><span class="vn">Mystic Broomstick</span></div>
         </div>
       </div>
       <div class="ir">
@@ -298,1001 +406,608 @@ canvas{width:100%;height:100%;display:block;}
   </div>
 </div>
 
-<div id="ct"><h2 style="font-size:1.7rem;font-weight:800;margin-bottom:4px;">FLIGHT SECURED!</h2><p id="CPD" style="font-size:1rem;font-weight:600;opacity:0.95;">You earned ZK 0.00</p></div>
+<div id="ct"><h2 style="font-size:1.6rem;font-weight:800;margin-bottom:3px;">FLIGHT SECURED!</h2><p id="CPD" style="font-size:0.95rem;font-weight:600;opacity:0.95;">You earned ZK 0.00</p></div>
 
-<div class="spo" id="SPO">
-  <div class="spm">
-    <h3>Save your progress</h3>
-    <p>Add an email and password so your balance follows you back next time.</p>
-    <input type="email" id="SE" placeholder="Email address">
-    <input type="password" id="SPW" placeholder="Create a password">
-    <div class="sps" id="SPS"></div>
-    <button id="spc">Save account</button>
-    <button id="spca">Not now</button>
+<!-- ══ WALLET MODAL ══ -->
+<div class="w-overlay" id="WO" onclick="handleWOverlay(event)">
+  <div class="w-modal">
+    <div class="w-drag"></div>
+    <div class="w-head">
+      <div class="w-title">💳 My Wallet</div>
+      <button class="w-close" onclick="closeWallet()">✕</button>
+    </div>
+
+    <!-- Balance -->
+    <div class="w-balance">
+      <div class="w-bal-eye">Available Balance</div>
+      <div class="w-bal-amt"><span>ZK </span><span id="WB">0.00</span></div>
+      <div class="w-bal-sub"><span class="live-dot"></span><span id="w-mode-lbl">Sandbox mode</span></div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="w-qa">
+      <button class="w-qa-btn w-qa-dep" onclick="wSwitchTab('deposit')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>Deposit
+      </button>
+      <button class="w-qa-btn w-qa-wd" onclick="wSwitchTab('withdraw')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>Withdraw
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="w-tabs">
+      <button class="w-tab active" id="wtab-deposit" onclick="wSwitchTab('deposit')">Deposit</button>
+      <button class="w-tab" id="wtab-withdraw" onclick="wSwitchTab('withdraw')">Withdraw</button>
+      <button class="w-tab" id="wtab-history" onclick="wSwitchTab('history')">History</button>
+    </div>
+
+    <div class="w-body">
+
+      <!-- DEPOSIT PANEL -->
+      <div class="w-panel active" id="wpanel-deposit">
+        <div style="height:10px;"></div>
+        <label class="f-label">Select Network</label>
+        <div class="net-grid">
+          <div class="net-opt sel" id="dnet-airtel" onclick="selDepNet('airtel')">
+            <div class="net-icon ni-air">A</div>
+            <div><div class="net-name">Airtel Money</div><div class="net-sub">Zambia · ZMW</div></div>
+          </div>
+          <div class="net-opt" id="dnet-mtn" onclick="selDepNet('mtn')">
+            <div class="net-icon ni-mtn">M</div>
+            <div><div class="net-name">MTN MoMo</div><div class="net-sub">Zambia · ZMW</div></div>
+          </div>
+        </div>
+
+        <label class="f-label">Mobile Number</label>
+        <input type="tel" class="f-input" id="d-phone" placeholder="e.g. 260971234567" oninput="onDepInput()">
+
+        <label class="f-label">Amount (ZMW)</label>
+        <div class="f-amt-wrap">
+          <span class="f-amt-pre">ZK</span>
+          <input type="number" class="f-input has-pre" id="d-amt" placeholder="0.00" min="10" max="10000" oninput="onDepInput()">
+        </div>
+        <div class="f-warn" id="d-warn"></div>
+
+        <div class="chips" style="margin-top:8px;">
+          <div class="chip" onclick="setAmt('d',20)">ZK 20</div>
+          <div class="chip" onclick="setAmt('d',50)">ZK 50</div>
+          <div class="chip" onclick="setAmt('d',100)">ZK 100</div>
+          <div class="chip" onclick="setAmt('d',200)">ZK 200</div>
+          <div class="chip" onclick="setAmt('d',500)">ZK 500</div>
+          <div class="chip" onclick="setAmt('d',1000)">ZK 1,000</div>
+        </div>
+
+        <div class="fee-box" id="d-fees">
+          <div class="fee-row"><span class="fee-lbl">You send</span><span class="fee-val" id="df-send">ZK 0.00</span></div>
+          <div class="fee-row"><span class="fee-lbl">Processing fee (~1.4%)</span><span class="fee-val" id="df-fee">ZK 0.00</span></div>
+          <div class="fee-row"><span class="fee-lbl">You receive in wallet</span><span class="fee-val tot" id="df-net">ZK 0.00</span></div>
+        </div>
+
+        <div class="ussd-box" id="d-ussd">
+          <div class="ussd-title">📱 Check Your Phone</div>
+          <div class="ussd-msg">A prompt was sent to <strong id="ussd-ph">your phone</strong>.<br>Approve it with your <strong id="ussd-net">Airtel Money</strong> PIN.</div>
+          <div class="ussd-timer">
+            <span id="ussd-cd">120s</span>
+            <div class="timer-bar"><div class="timer-fill" id="ussd-fill" style="width:100%"></div></div>
+            <span>remaining</span>
+          </div>
+        </div>
+
+        <div class="s-msg" id="d-status"><div class="spinner"></div><span id="d-status-txt">Processing...</span></div>
+
+        <button class="w-btn w-btn-dep" id="d-btn" onclick="doDeposit()" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          Deposit via Mobile Money
+        </button>
+      </div>
+
+      <!-- WITHDRAW PANEL -->
+      <div class="w-panel" id="wpanel-withdraw">
+        <div style="height:10px;"></div>
+        <label class="f-label">Send to Network</label>
+        <div class="net-grid">
+          <div class="net-opt sel" id="wnet-airtel" onclick="selWdNet('airtel')">
+            <div class="net-icon ni-air">A</div>
+            <div><div class="net-name">Airtel Money</div><div class="net-sub">Zambia · ZMW</div></div>
+          </div>
+          <div class="net-opt" id="wnet-mtn" onclick="selWdNet('mtn')">
+            <div class="net-icon ni-mtn">M</div>
+            <div><div class="net-name">MTN MoMo</div><div class="net-sub">Zambia · ZMW</div></div>
+          </div>
+        </div>
+
+        <label class="f-label">Mobile Number</label>
+        <input type="tel" class="f-input" id="w-phone" placeholder="e.g. 260971234567" oninput="onWdInput()">
+
+        <label class="f-label">Amount (ZMW)</label>
+        <div class="f-amt-wrap">
+          <span class="f-amt-pre">ZK</span>
+          <input type="number" class="f-input has-pre" id="w-amt" placeholder="0.00" min="10" oninput="onWdInput()">
+        </div>
+        <div class="f-warn" id="w-warn"></div>
+
+        <div class="chips" style="margin-top:8px;" id="wd-chips">
+          <div class="chip" onclick="setAmt('w',50)">ZK 50</div>
+          <div class="chip" onclick="setAmt('w',100)">ZK 100</div>
+          <div class="chip" onclick="setAmt('w',200)">ZK 200</div>
+          <div class="chip" onclick="setAmt('w',500)">ZK 500</div>
+          <div class="chip" id="chip-all" onclick="setAmt('w','all')">Withdraw All</div>
+        </div>
+
+        <div class="fee-box" id="w-fees">
+          <div class="fee-row"><span class="fee-lbl">Withdraw amount</span><span class="fee-val" id="wf-amt">ZK 0.00</span></div>
+          <div class="fee-row"><span class="fee-lbl">Processing fee</span><span class="fee-val" id="wf-fee">ZK 3.00</span></div>
+          <div class="fee-row"><span class="fee-lbl">You receive</span><span class="fee-val tot" id="wf-net">ZK 0.00</span></div>
+        </div>
+
+        <div class="s-msg" id="w-status"><div class="spinner"></div><span id="w-status-txt">Processing...</span></div>
+
+        <button class="w-btn w-btn-wd" id="w-btn" onclick="doWithdraw()" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          Withdraw to Mobile Money
+        </button>
+      </div>
+
+      <!-- HISTORY PANEL -->
+      <div class="w-panel" id="wpanel-history">
+        <div style="height:10px;"></div>
+        <div class="tx-list" id="tx-list">
+          <div class="tx-empty"><div class="ei">📭</div><p>No transactions yet.<br>Make your first deposit to start playing.</p></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="rg-foot">
+      <span>🛡️</span>
+      <p>Play responsibly. Min deposit ZK 10 · Max ZK 10,000/day · 18+ only · Licensed under Vyeta LLC · Gambling helpline: <strong>116</strong></p>
+    </div>
   </div>
 </div>
 
 <script>
-// ══════════════════════════════════════════════════
-//  KWACHA BALLOON ADVENTURES — Enhanced v3
-// ══════════════════════════════════════════════════
-const SERVER_URL = "https://kids-games-o79b.onrender.com";
-let socket;
+// ═══════════════════════════════════════════════════
+//  KWACHA BALLOON ADVENTURES — Complete Build v4
+//  Game + Wallet + Lenco Payments
+// ═══════════════════════════════════════════════════
 
-// State
-let balance=0, mult=1, status="CONNECTING", vehicle="balloon";
-let betState="NONE", betAmt=0;
+const SERVER = 'https://kids-games-o79b.onrender.com';
 
-// Canvas
+// ── Guest ID (persistent across sessions) ─────────
+function getGuestId(){
+  let id=localStorage.getItem('kba_guest_id');
+  if(!id){id=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():'guest-'+Date.now();localStorage.setItem('kba_guest_id',id);}
+  return id;
+}
+const PLAYER_ID=getGuestId();
+
+// ── Game State ────────────────────────────────────
+let socket, gameStatus='CONNECTING', mult=1, betState='NONE', betAmt=0;
+let walletBalance=0;
+
+// ── Canvas ────────────────────────────────────────
 const canvas=document.getElementById('FC'), ctx=canvas.getContext('2d');
+let cX=120,cY=400,tY=400,safeTop=70,safeBottom=500,scrollX=0;
+let vehicle='balloon';
+let stars=[],clouds=[],mountains=[],buildings=[];
+let particles=[],shockwaves=[],coins=[],pathPts=[];
 
-// Craft position — clamped within safe zone
-let cX=100, cY=400, tY=400;
-// Safe flight zone in canvas coords (updated on resize)
-let safeTop=80, safeBottom=500;
+// ── Sound ─────────────────────────────────────────
+let AC=null,engGain=null,engOsc=null,engOsc2=null;
+function ac(){if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();return AC;}
+function resumeAC(){try{ac().resume();}catch(e){}}
+function startEngine(){try{const a=ac();if(engOsc)return;engGain=a.createGain();engGain.gain.setValueAtTime(0,a.currentTime);engGain.gain.linearRampToValueAtTime(0.08,a.currentTime+1);const f=a.createBiquadFilter();f.type='lowpass';f.frequency.value=380;engOsc=a.createOscillator();engOsc.type='sawtooth';engOsc.frequency.value=78;engOsc2=a.createOscillator();engOsc2.type='triangle';engOsc2.frequency.value=158;engOsc.connect(f);engOsc2.connect(f);f.connect(engGain);engGain.connect(a.destination);engOsc.start();engOsc2.start();}catch(e){}}
+function rampEngine(m){if(!engOsc)return;try{const t=ac().currentTime;engOsc.frequency.setTargetAtTime(Math.min(75+m*20,420),t,0.4);engOsc2.frequency.setTargetAtTime(Math.min(152+m*25,720),t,0.4);engGain.gain.setTargetAtTime(Math.min(0.06+m*0.007,0.15),t,0.6);}catch(e){}}
+function stopEngine(){if(!engOsc)return;try{engGain.gain.linearRampToValueAtTime(0,ac().currentTime+0.6);setTimeout(()=>{try{engOsc.stop();engOsc2.stop();}catch(e){}engOsc=engOsc2=engGain=null;},700);}catch(e){}}
+function tone(freq,dur,type='sine',vol=0.14,delay=0){try{const a=ac(),t=a.currentTime+delay;const g=a.createGain();g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);const o=a.createOscillator();o.type=type;o.frequency.value=freq;o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur);}catch(e){}}
+function sfxCashout(){[440,554,659,880,1320].forEach((f,i)=>tone(f,0.22,'sine',0.12,i*0.065));}
+function sfxCrash(){try{const a=ac(),buf=a.createBuffer(1,a.sampleRate*0.7,a.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.4)*0.55;const s=a.createBufferSource();s.buffer=buf;const f=a.createBiquadFilter();f.type='bandpass';f.frequency.value=280;const g=a.createGain();g.gain.setValueAtTime(0.5,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.7);s.connect(f);f.connect(g);g.connect(a.destination);s.start();}catch(e){}tone(75,0.5,'sawtooth',0.18);}
+function sfxMilestone(){[523,659,784,1047].forEach((f,i)=>tone(f,0.16,'square',0.09,i*0.05));}
+function sfxBet(){tone(330,0.1,'sine',0.1);tone(440,0.1,'sine',0.1,0.1);}
+function sfxTick(n){tone(n===1?900:460,0.07,'sine',0.09);}
+function sfxDeposit(){[523,659,784,1047,1318].forEach((f,i)=>tone(f,0.2,'sine',0.12,i*0.06));}
 
-// Particle / FX pools
-let particles=[], coinBursts=[], shockwaves=[], cloudLayers=[];
-let stars=[], mountainPoints=[], buildingData=[];
-
-// Parallax scroll offsets
-let scrollX=0, bgHue=220;
-
-// Sound (Web Audio API)
-let audioCtx=null, engineGain=null, engineOsc=null, engineOsc2=null;
-
-function getAudio(){
-  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-  return audioCtx;
-}
-
-// ── SOUND ENGINE ──────────────────────────────────
-function startEngineSound(){
-  try{
-    const ac=getAudio();
-    if(engineOsc) return;
-    engineGain=ac.createGain(); engineGain.gain.setValueAtTime(0,ac.currentTime);
-    engineGain.gain.linearRampToValueAtTime(0.09,ac.currentTime+0.8);
-    engineOsc=ac.createOscillator(); engineOsc.type='sawtooth'; engineOsc.frequency.value=80;
-    engineOsc2=ac.createOscillator(); engineOsc2.type='triangle'; engineOsc2.frequency.value=162;
-    const filt=ac.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=400;
-    engineOsc.connect(filt); engineOsc2.connect(filt);
-    filt.connect(engineGain); engineGain.connect(ac.destination);
-    engineOsc.start(); engineOsc2.start();
-  }catch(e){}
-}
-
-function updateEngineSound(m){
-  if(!engineOsc||!audioCtx) return;
-  try{
-    const freq=75+m*18; const freq2=155+m*22;
-    engineOsc.frequency.setTargetAtTime(Math.min(freq,400),audioCtx.currentTime,0.3);
-    engineOsc2.frequency.setTargetAtTime(Math.min(freq2,700),audioCtx.currentTime,0.3);
-    const vol=0.06+Math.min(m*0.008,0.12);
-    engineGain.gain.setTargetAtTime(vol,audioCtx.currentTime,0.5);
-  }catch(e){}
-}
-
-function stopEngineSound(){
-  if(!engineOsc) return;
-  try{
-    engineGain.gain.linearRampToValueAtTime(0,audioCtx.currentTime+0.5);
-    setTimeout(()=>{
-      try{engineOsc.stop();engineOsc2.stop();}catch(e){}
-      engineOsc=null;engineOsc2=null;engineGain=null;
-    },600);
-  }catch(e){}
-}
-
-function playTone(freq,dur,type='sine',vol=0.18,detune=0){
-  try{
-    const ac=getAudio();
-    const g=ac.createGain(); g.gain.setValueAtTime(vol,ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+dur);
-    const o=ac.createOscillator(); o.type=type; o.frequency.value=freq; o.detune.value=detune;
-    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime+dur);
-  }catch(e){}
-}
-
-function playCashout(){
-  // Rising arpeggio
-  [440,554,659,880].forEach((f,i)=>setTimeout(()=>playTone(f,0.25,'sine',0.15),i*70));
-  setTimeout(()=>playTone(1320,0.4,'sine',0.12),300);
-}
-
-function playCrash(){
-  try{
-    const ac=getAudio();
-    const buf=ac.createBuffer(1,ac.sampleRate*0.6,ac.sampleRate);
-    const d=buf.getChannelData(0);
-    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5)*0.6;
-    const src=ac.createBufferSource(); src.buffer=buf;
-    const filt=ac.createBiquadFilter(); filt.type='bandpass'; filt.frequency.value=300;
-    const g=ac.createGain(); g.gain.setValueAtTime(0.5,ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.6);
-    src.connect(filt); filt.connect(g); g.connect(ac.destination); src.start();
-  }catch(e){}
-  playTone(80,0.5,'sawtooth',0.2);
-}
-
-function playMilestone(){
-  [523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,0.18,'square',0.1),i*55));
-}
-
-function playBetPlace(){
-  playTone(330,0.12,'sine',0.1);
-  setTimeout(()=>playTone(440,0.12,'sine',0.1),100);
-}
-
-function playCountdownTick(n){
-  playTone(n===1?880:440,0.08,'sine',0.1);
-}
-
-// ── CANVAS SETUP ─────────────────────────────────
+// ── Scene ─────────────────────────────────────────
 function resize(){
-  const dpr=window.devicePixelRatio||1;
-  const r=canvas.getBoundingClientRect();
-  canvas.width=r.width*dpr; canvas.height=r.height*dpr;
-  ctx.scale(dpr,dpr);
-  const W=r.width, H=r.height;
-  // Safe flight zone: keep craft visible — between header and control board
-  safeTop=60; safeBottom=H-20;
-  // Re-seed craft Y if idle
-  if(status!=="IN_FLIGHT"){ cY=H*0.62; tY=cY; }
+  const dpr=window.devicePixelRatio||1,r=canvas.getBoundingClientRect();
+  canvas.width=r.width*dpr;canvas.height=r.height*dpr;ctx.scale(dpr,dpr);
+  const W=r.width,H=r.height;
+  safeTop=64;safeBottom=H-16;
+  if(gameStatus!=='IN_FLIGHT'){cY=H*0.62;tY=cY;}
   buildScene(W,H);
 }
-
 function buildScene(W,H){
-  // Parallax star field — 3 layers
   stars=[];
-  for(let l=0;l<3;l++) for(let i=0;i<25+l*15;i++)
-    stars.push({x:Math.random()*W,y:Math.random()*H*0.8,r:0.5+l*0.5,speed:(l+1)*0.4,bright:Math.random(),layer:l});
-
-  // Procedural mountain silhouettes — 2 layers
-  mountainPoints=[];
-  for(let l=0;l<2;l++){
-    const pts=[];
-    pts.push({x:-50,y:H});
-    let x=0;
-    while(x<W+200){
-      const peakH=H*(0.35+Math.random()*(l===0?0.3:0.2));
-      pts.push({x,y:H-peakH});
-      x+=30+Math.random()*80;
-      pts.push({x,y:H-peakH+20+Math.random()*40});
-      x+=20+Math.random()*60;
-    }
-    pts.push({x:W+200,y:H});
-    mountainPoints.push({pts,scrollFactor:l===0?0.08:0.04,layer:l});
-  }
-
-  // City buildings on horizon
-  buildingData=[];
-  let bx=0;
-  while(bx<W+200){
-    const bw=20+Math.random()*40, bh=30+Math.random()*90;
-    buildingData.push({x:bx,w:bw,h:bh,lit:Math.random()>0.4});
-    bx+=bw+4+Math.random()*12;
-  }
-
-  // Cloud layers
-  cloudLayers=[];
-  for(let i=0;i<6;i++)
-    cloudLayers.push({x:Math.random()*W*1.5-W*0.2,y:H*(0.08+Math.random()*0.35),
-      w:120+Math.random()*180,alpha:0.06+Math.random()*0.1,speed:0.2+Math.random()*0.4});
+  for(let l=0;l<3;l++)for(let i=0;i<30;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.82,r:0.4+l*0.55,sp:(l+1)*0.45,br:Math.random(),l});
+  clouds=[];
+  for(let i=0;i<7;i++)clouds.push({x:Math.random()*W*1.6-W*0.1,y:H*(0.06+Math.random()*0.38),w:110+Math.random()*200,a:0.05+Math.random()*0.09,sp:0.18+Math.random()*0.38});
+  mountains=[];
+  for(let l=0;l<2;l++){const pts=[{x:-40,y:H}];let x=0;while(x<W+180){const ph=H*(0.32+Math.random()*(l===0?0.28:0.18));pts.push({x,y:H-ph});x+=28+Math.random()*75;pts.push({x,y:H-ph+18+Math.random()*35});x+=18+Math.random()*55;}pts.push({x:W+180,y:H});mountains.push({pts,sf:l===0?0.07:0.035});}
+  buildings=[];let bx=0;
+  while(bx<W+160){const bw=18+Math.random()*38,bh=28+Math.random()*85;buildings.push({x:bx,w:bw,h:bh,lit:Math.random()>0.38});bx+=bw+3+Math.random()*10;}
 }
 
-// ── RENDER LOOP ────────────────────────────────────
-function frame(){
-  const dpr=window.devicePixelRatio||1;
-  const W=canvas.width/dpr, H=canvas.height/dpr;
+// ── Main Loop ─────────────────────────────────────
+function loop(){
+  const dpr=window.devicePixelRatio||1,W=canvas.width/dpr,H=canvas.height/dpr;
   ctx.clearRect(0,0,W,H);
-  drawSky(W,H);
-  drawStars(W,H);
-  drawClouds(W,H);
-  drawMountains(W,H);
-  drawCityscape(W,H);
-  if(status==="IN_FLIGHT") drawFlightPath(W,H);
-  drawParticles();
-  drawShockwaves();
-  drawCoinBursts();
-  if(status!=="CRASHED") drawCraft(W,H);
-  requestAnimationFrame(frame);
+  drawSky(W,H);drawStars(W,H);drawClouds(W,H);drawMountains(W,H);drawCity(W,H);
+  if(gameStatus==='IN_FLIGHT'&&pathPts.length>1){ctx.save();ctx.beginPath();ctx.moveTo(pathPts[0].x,pathPts[0].y);pathPts.forEach(p=>ctx.lineTo(p.x,p.y));ctx.strokeStyle=mult>5?'rgba(239,68,68,0.2)':mult>2?'rgba(245,158,11,0.18)':'rgba(0,229,255,0.14)';ctx.lineWidth=2.5;ctx.stroke();ctx.restore();}
+  drawShockwaves();drawParticles();drawCoins();
+  if(gameStatus!=='CRASHED')drawCraft(W,H);
+  requestAnimationFrame(loop);
+}
+function drawSky(W,H){const t=gameStatus==='IN_FLIGHT'?Math.min(mult/18,1):0;const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,`rgb(${6+t*22},${9+t*6},${18+t*55})`);g.addColorStop(0.55,`rgb(${14+t*38},${20+t*14},${50+t*75})`);g.addColorStop(1,`rgb(${10+t*28},${15+t*10},${35+t*55})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);if(mult>3){const aA=Math.min((mult-3)/14,0.14);[['rgba(0,229,255',H*0.08],['rgba(168,85,247',H*0.17],['rgba(16,185,129',H*0.26]].forEach(([col,yy])=>{const ag=ctx.createLinearGradient(0,yy,0,yy+H*0.1);ag.addColorStop(0,col+',0)');ag.addColorStop(0.5,col+`,${aA})`);ag.addColorStop(1,col+',0)');ctx.fillStyle=ag;ctx.fillRect(0,yy,W,H*0.12);});}if(gameStatus==='IN_FLIGHT'&&mult>2){ctx.strokeStyle=`rgba(0,229,255,${Math.min((mult-2)*0.018,0.1)})`;ctx.lineWidth=0.8;for(let i=0;i<Math.min((mult-2)*4,28)|0;i++){const sx=Math.random()*W,sy=Math.random()*H,len=10+mult*7;ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx-len,sy);ctx.stroke();}}}
+function drawStars(W,H){const sp=gameStatus==='IN_FLIGHT'?mult*0.7:0;stars.forEach(s=>{if(sp>0){s.x-=s.sp*sp*0.5;if(s.x<-3){s.x=W+3;s.y=Math.random()*H*0.8;}}const tw=0.3+Math.abs(Math.sin(Date.now()*0.0009*(s.l+1)+s.x*0.01))*0.5;ctx.globalAlpha=s.br*tw*(gameStatus==='IN_FLIGHT'?Math.min(mult/2.5,1):0.45);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;}
+function drawClouds(W,H){const sp=gameStatus==='IN_FLIGHT'?mult*0.55:0.14;clouds.forEach(c=>{c.x-=c.sp*(sp||0.14);if(c.x<-c.w-60)c.x=W+60;ctx.save();ctx.globalAlpha=c.a;ctx.fillStyle='rgba(200,212,255,1)';for(let i=0;i<5;i++){const cx=c.x+i*(c.w/5),cr=c.w*0.13+Math.sin(i*1.1)*c.w*0.04;ctx.beginPath();ctx.arc(cx,c.y,cr,0,Math.PI*2);ctx.fill();}ctx.restore();});}
+function drawMountains(W,H){mountains.forEach((m,mi)=>{const ox=(-scrollX*m.sf)%(W+360);ctx.save();ctx.fillStyle=mi===0?'rgba(14,18,40,0.38)':'rgba(9,13,30,0.22)';ctx.beginPath();ctx.moveTo(m.pts[0].x+ox,m.pts[0].y);m.pts.forEach(p=>ctx.lineTo(p.x+ox,p.y));ctx.closePath();ctx.fill();ctx.restore();});}
+function drawCity(W,H){const cityY=H*0.74,ox=(-scrollX*0.018)%(W+200);buildings.forEach(b=>{const bx=((b.x+ox)%(W+180))-90,ty=cityY-b.h;ctx.fillStyle='rgba(7,11,26,0.88)';ctx.fillRect(bx,ty,b.w,b.h);if(b.lit&&gameStatus==='IN_FLIGHT'){for(let wy=ty+5;wy<cityY-5;wy+=9)for(let wx=bx+3;wx<bx+b.w-3;wx+=7)if(Math.random()>0.55){ctx.fillStyle=`rgba(255,218,90,${0.25+Math.random()*0.3})`;ctx.fillRect(wx,wy,3,4);}}});}
+
+// ── Craft ─────────────────────────────────────────
+function updatePos(W,H){
+  if(gameStatus==='IN_FLIGHT'){
+    const tX=Math.min(130+mult*16,W*0.44);cX+=(tX-cX)*0.06;
+    const raw=H*0.68-Math.log(mult+1)*H*0.175;tY=Math.max(safeTop+8,Math.min(safeBottom-90,raw));
+    cY+=(tY-cY)*0.07;pathPts.push({x:cX,y:cY});if(pathPts.length>65)pathPts.shift();
+    scrollX+=mult*1.1;rampEngine(mult);if(Math.random()>0.3)spawnTrail();
+  }else if(gameStatus==='BETTING'){cX+=(115-cX)*0.08;tY=H*0.62+Math.sin(Date.now()*0.0033)*7;cY+=(tY-cY)*0.1;pathPts=[];}
+}
+function drawCraft(W,H){updatePos(W,H);ctx.save();const gc=mult>5?'rgba(239,68,68,0.28)':mult>2?'rgba(245,158,11,0.22)':'rgba(0,229,255,0.18)';ctx.shadowBlur=28;ctx.shadowColor=gc;if(vehicle==='balloon')drawBalloon(cX,cY);else if(vehicle==='lwango')drawLwango(cX,cY);else drawBroom(cX,cY);ctx.restore();}
+
+function drawBalloon(x,y){const b=1+Math.sin(Date.now()*0.0028)*0.013;ctx.save();ctx.translate(x,y);ctx.scale(b,b);const bg=ctx.createRadialGradient(-9,-40,3,-6,-32,36);bg.addColorStop(0,'#fb7185');bg.addColorStop(0.45,'#e11d48');bg.addColorStop(1,'#7f1d1d');ctx.fillStyle=bg;ctx.beginPath();ctx.ellipse(0,-34,30,37,0,0,Math.PI*2);ctx.fill();ctx.save();ctx.beginPath();ctx.ellipse(0,-34,30,37,0,0,Math.PI*2);ctx.clip();['rgba(251,191,36,0.28)','rgba(16,185,129,0.22)','rgba(59,130,246,0.22)','rgba(251,191,36,0.22)'].forEach((c,i)=>{ctx.fillStyle=c;ctx.fillRect(-30+i*15,-72,15,76);});ctx.restore();const sh=ctx.createRadialGradient(-11,-52,1,-9,-44,16);sh.addColorStop(0,'rgba(255,255,255,0.42)');sh.addColorStop(1,'rgba(255,255,255,0)');ctx.fillStyle=sh;ctx.beginPath();ctx.ellipse(-9,-44,13,16,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(0,0,0,0.72)';ctx.beginPath();ctx.arc(0,-34,11,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(251,191,36,0.6)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,-34,11,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#fbbf24';ctx.font='bold 13px Sora,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('K',0,-34);ctx.strokeStyle='#94a3b8';ctx.lineWidth=1.2;ctx.lineCap='round';[[-14,-10,-14,8],[14,-10,14,8],[0,-8,0,8],[-7,-4,-14,8],[7,-4,14,8]].forEach(([x1,y1,x2,y2])=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();});ctx.fillStyle='#a16207';if(ctx.roundRect)ctx.roundRect(-11,11,22,16,3);else ctx.rect(-11,11,22,16);ctx.fill();ctx.strokeStyle='#78350f';ctx.lineWidth=1;ctx.strokeRect(-11,11,22,16);ctx.strokeStyle='rgba(92,65,40,0.55)';ctx.lineWidth=0.9;for(let wx=-7;wx<=11;wx+=5){ctx.beginPath();ctx.moveTo(wx,11);ctx.lineTo(wx,27);ctx.stroke();}ctx.beginPath();ctx.moveTo(-11,19);ctx.lineTo(11,19);ctx.stroke();if(gameStatus==='IN_FLIGHT'){const fl=0.75+Math.sin(Date.now()*0.018)*0.25;const fg=ctx.createRadialGradient(0,4,0,0,4,11);fg.addColorStop(0,'rgba(255,252,180,0.96)');fg.addColorStop(0.4,'rgba(251,146,60,0.85)');fg.addColorStop(1,'rgba(234,88,12,0)');ctx.fillStyle=fg;ctx.beginPath();ctx.ellipse(0,3,5*fl,11*fl,0,0,Math.PI*2);ctx.fill();}ctx.fillStyle='#fde68a';ctx.beginPath();ctx.arc(0,10,4.5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#1d4ed8';ctx.beginPath();ctx.arc(0,10,4.5,Math.PI,0);ctx.fill();ctx.fillStyle='rgba(56,189,248,0.8)';ctx.fillRect(-4.5,9,9,2.5);ctx.strokeStyle='#f43f5e';ctx.lineWidth=1.8;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-3,13);ctx.quadraticCurveTo(-9,15,-13,12);ctx.stroke();ctx.strokeStyle='#1e293b';ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(-4,18);ctx.lineTo(-10,21);ctx.stroke();ctx.beginPath();ctx.moveTo(4,18);ctx.lineTo(10,21);ctx.stroke();ctx.restore();}
+
+function drawLwango(x,y){const bob=Math.sin(Date.now()*0.003)*0.014;ctx.save();ctx.translate(x,y);ctx.scale(1+bob,1-bob);const lg=ctx.createRadialGradient(-7,-8,3,-5,-6,32);lg.addColorStop(0,'#fcd34d');lg.addColorStop(0.5,'#d97706');lg.addColorStop(1,'#78350f');ctx.fillStyle=lg;ctx.beginPath();ctx.ellipse(0,-2,30,20,0,0,Math.PI,true);ctx.closePath();ctx.fill();ctx.save();ctx.beginPath();ctx.ellipse(0,-2,30,20,0,0,Math.PI,true);ctx.closePath();ctx.clip();ctx.strokeStyle='rgba(146,64,14,0.5)';ctx.lineWidth=1.3;for(let i=-30;i<=30;i+=8){ctx.beginPath();ctx.moveTo(i,-22);ctx.lineTo(i,5);ctx.stroke();}for(let j=-20;j<=5;j+=6){ctx.beginPath();ctx.moveTo(-32,j);ctx.lineTo(32,j);ctx.stroke();}ctx.restore();ctx.strokeStyle='rgba(251,191,36,0.65)';ctx.lineWidth=2.5;ctx.beginPath();ctx.ellipse(0,-2,30,20,0,Math.PI,Math.PI*2);ctx.stroke();ctx.strokeStyle='#a8a29e';ctx.lineWidth=1.3;ctx.lineCap='round';[[-20,-2,-26,-30],[20,-2,26,-30],[0,-22,0,-34]].forEach(([x1,y1,x2,y2])=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.fillStyle='#78716c';ctx.beginPath();ctx.arc(x2,y2,2,0,Math.PI*2);ctx.fill();});ctx.fillStyle='#4b5563';ctx.fillRect(-4,-34,8,5);if(gameStatus==='IN_FLIGHT'){const fl=0.7+Math.sin(Date.now()*0.02)*0.3;const fg=ctx.createRadialGradient(0,-40,0,0,-40,13);fg.addColorStop(0,'rgba(255,248,150,0.97)');fg.addColorStop(0.45,'rgba(251,146,60,0.8)');fg.addColorStop(1,'rgba(234,88,12,0)');ctx.fillStyle=fg;ctx.beginPath();ctx.ellipse(0,-42,5*fl,13*fl,0,0,Math.PI*2);ctx.fill();}ctx.fillStyle='#fde68a';ctx.beginPath();ctx.arc(0,4,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#92400e';ctx.beginPath();ctx.ellipse(0,0,9,3,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#a16207';ctx.beginPath();ctx.ellipse(0,-1,5,5,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fbbf24';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(0,-1,5,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#1e293b';ctx.beginPath();ctx.arc(-1.5,4,1,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(1.5,4,1,0,Math.PI*2);ctx.fill();ctx.restore();}
+
+function drawBroom(x,y){ctx.save();ctx.translate(x,y);const tilt=-0.15+(gameStatus==='IN_FLIGHT'?-0.06:0);ctx.rotate(tilt);const hg=ctx.createLinearGradient(-36,0,30,-7);hg.addColorStop(0,'#6b3a0f');hg.addColorStop(0.3,'#a16207');hg.addColorStop(0.7,'#92400e');hg.addColorStop(1,'#6b3a0f');ctx.strokeStyle=hg;ctx.lineWidth=5.5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-36,6);ctx.lineTo(30,-4);ctx.stroke();ctx.strokeStyle='rgba(255,255,255,0.14)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-28,4);ctx.lineTo(25,-2);ctx.stroke();[['#d97706',0,0],['#b45309',2,2],['#92400e',4,4]].forEach(([col,ox,oy])=>{ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(-36+ox,3+oy);ctx.lineTo(-54+ox*0.5,-5+oy*0.5);ctx.lineTo(-56+ox*0.5,12+oy);ctx.closePath();ctx.fill();});if(gameStatus==='IN_FLIGHT')for(let i=0;i<5;i++){const px=-50+Math.random()*16,py=-3+Math.random()*13;ctx.fillStyle=`rgba(168,85,247,${0.45+Math.random()*0.45})`;ctx.beginPath();ctx.arc(px,py,0.8+Math.random()*1.8,0,Math.PI*2);ctx.fill();}ctx.strokeStyle='#dc2626';ctx.lineWidth=2.8;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-34,5);ctx.lineTo(-31,8);ctx.stroke();ctx.strokeStyle='#fbbf24';ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(-28,4);ctx.lineTo(-25,7);ctx.stroke();ctx.save();ctx.rotate(-tilt*0.4);ctx.fillStyle='#1e3a5f';ctx.beginPath();ctx.ellipse(3,-10,5.5,7.5,0.25,0,Math.PI*2);ctx.fill();ctx.fillStyle='#1e3a5f';ctx.beginPath();ctx.moveTo(-2,-8);ctx.lineTo(-12,4);ctx.lineTo(2,2);ctx.closePath();ctx.fill();ctx.strokeStyle='#fbbf24';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-2,-8);ctx.lineTo(-12,4);ctx.stroke();ctx.fillStyle='#fde68a';ctx.beginPath();ctx.arc(5,-19,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#4c1d95';ctx.beginPath();ctx.moveTo(5,-24);ctx.lineTo(0,-42);ctx.lineTo(10,-42);ctx.closePath();ctx.fill();ctx.fillStyle='#6d28d9';ctx.beginPath();ctx.ellipse(5,-24,8,2.5,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fbbf24';ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText('★',5,-33);ctx.strokeStyle='#38bdf8';ctx.lineWidth=1.8;ctx.beginPath();ctx.arc(2,-19,2.5,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(8,-19,2.5,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#ef4444';ctx.lineWidth=2.2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(1,-15);ctx.quadraticCurveTo(-8,-19,-16,-16);ctx.stroke();ctx.restore();ctx.restore();}
+
+// ── FX ────────────────────────────────────────────
+function spawnTrail(){const cols=vehicle==='broom'?['rgba(168,85,247,0.85)','rgba(255,255,200,0.9)','rgba(196,131,68,0.6)']:['rgba(0,229,255,0.9)','rgba(255,255,255,0.65)','rgba(16,185,129,0.7)'];for(let i=0;i<2;i++)particles.push({x:cX-18+Math.random()*5,y:cY+(vehicle==='balloon'?18:12)+Math.random()*5,vx:-(Math.random()*2.5+mult*0.35),vy:(Math.random()-0.5)*1.4,r:Math.random()*3+0.8,col:cols[i%cols.length],a:1,d:0.016+Math.random()*0.013});}
+function explode(x,y){for(let i=0;i<65;i++){const ang=Math.random()*Math.PI*2,sp=Math.random()*11+2;particles.push({x,y,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,r:Math.random()*7+2,col:Math.random()>0.4?'rgba(239,68,68,0.9)':'rgba(245,158,11,0.9)',a:1,d:0.02+Math.random()*0.025});}shockwaves.push({x,y,r:0,maxR:220,a:0.75,col:'rgba(239,68,68,'});shockwaves.push({x,y,r:0,maxR:100,a:0.5,col:'rgba(245,158,11,'});}
+function coinBurst(x,y,amt){const n=Math.min(22,Math.floor(amt/12)+8);for(let i=0;i<n;i++){const ang=Math.random()*Math.PI*2,sp=Math.random()*7+2;coins.push({x,y,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp-3.5,r:5+Math.random()*4,a:1,d:0.016});}shockwaves.push({x,y,r:0,maxR:130,a:0.55,col:'rgba(251,191,36,'});}
+function drawParticles(){particles=particles.filter(p=>{p.x+=p.vx;p.y+=p.vy;p.a-=p.d;p.vy+=0.04;if(p.a<=0)return false;ctx.save();ctx.globalAlpha=Math.max(0,p.a);ctx.shadowBlur=9;ctx.shadowColor=p.col;ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.restore();return true;});}
+function drawShockwaves(){shockwaves=shockwaves.filter(sw=>{sw.r+=9;sw.a-=0.032;if(sw.a<=0)return false;ctx.save();ctx.globalAlpha=sw.a;ctx.strokeStyle=sw.col+sw.a+')';ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(sw.x,sw.y,sw.r,0,Math.PI*2);ctx.stroke();ctx.restore();return true;});}
+function drawCoins(){coins=coins.filter(c=>{c.x+=c.vx;c.y+=c.vy;c.vy+=0.14;c.a-=c.d;if(c.a<=0)return false;ctx.save();ctx.globalAlpha=Math.max(0,c.a);ctx.shadowBlur=12;ctx.shadowColor='rgba(251,191,36,0.8)';ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.arc(c.x,c.y,c.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#92400e';ctx.beginPath();ctx.arc(c.x,c.y,c.r*0.65,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fbbf24';ctx.font=`bold ${c.r|0}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('K',c.x,c.y);ctx.restore();return true;});}
+
+// ── Milestones ────────────────────────────────────
+const MILESTONES=[2,3,5,10,20,50,100];
+const M_LABELS={2:'🚀 2× ALTITUDE!',3:'⚡ 3× CHARGED!',5:'🔥 5× INFERNO!',10:'💎 10× DIAMOND!',20:'👑 20× ROYALTY!',50:'🌙 50× MOON!',100:'🪐 100× LEGEND!'};
+let reached=new Set();
+function checkMilestones(m){MILESTONES.forEach(ms=>{if(m>=ms&&!reached.has(ms)){reached.add(ms);const el=document.getElementById('mf');el.textContent=M_LABELS[ms]||`${ms}× MILESTONE!`;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1900);sfxMilestone();coinBurst(cX,cY,ms*10);shockwaves.push({x:cX,y:cY,r:0,maxR:280,a:0.38,col:'rgba(168,85,247,'});}});}
+
+// ── Countdown ─────────────────────────────────────
+let cdInt=null;const CIRC=138.23;
+function startCD(s){stopCD();document.getElementById('cd').classList.add('vis');document.getElementById('cdf').dataset.t=s;updateCDUI(s);cdInt=setInterval(()=>{s--;if(s<=0)stopCD();else{updateCDUI(s);sfxTick(s);}},1000);}
+function stopCD(){if(cdInt){clearInterval(cdInt);cdInt=null;}document.getElementById('cd').classList.remove('vis');}
+function updateCDUI(s){document.getElementById('cdn').textContent=s;const tot=parseInt(document.getElementById('cdf').dataset.t||s);document.getElementById('cdf').style.strokeDashoffset=CIRC*(1-s/tot);document.getElementById('cdf').style.stroke=s<=2?'var(--red)':s<=3?'var(--amber)':'var(--cyan)';}
+
+// ── UI helpers ────────────────────────────────────
+const mt=document.getElementById('mt'),sl=document.getElementById('sl');
+const AB=document.getElementById('AB'),BI=document.getElementById('BI');
+
+function setBalance(b){
+  walletBalance=b;
+  const fmt=b.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('BD').textContent='ZK '+fmt;
+  document.getElementById('WB').textContent=fmt;
+  document.getElementById('chip-all').textContent=`All (ZK ${b.toFixed(2)})`;
+  // Show low balance nudge if balance < 10
+  document.getElementById('low-nudge').classList.toggle('show', b < 10 && gameStatus === 'BETTING');
 }
 
-// Colour the sky based on altitude/multiplier
-function drawSky(W,H){
-  const t=status==="IN_FLIGHT"?Math.min(mult/20,1):0;
-  // Dawn → twilight → deep space
-  const topR=Math.round(6+t*20), topG=Math.round(9+t*5), topB=Math.round(18+t*50);
-  const botR=Math.round(12+t*30), botG=Math.round(18+t*10), botB=Math.round(40+t*60);
-  const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,`rgb(${topR},${topG},${topB})`);
-  g.addColorStop(0.6,`rgb(${Math.round(15+t*40)},${Math.round(20+t*15)},${Math.round(55+t*80)})`);
-  g.addColorStop(1,`rgb(${botR},${botG},${botB})`);
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+function log(txt){const e=document.createElement('div');e.className='le';e.innerHTML=`<span style="color:var(--muted);flex-shrink:0">[${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}]</span><span>${txt}</span>`;document.getElementById('LS').prepend(e);if(document.getElementById('LS').children.length>15)document.getElementById('LS').lastChild.remove();}
 
-  // Subtle aurora bands at high multiplier
-  if(mult>3){
-    const aAlpha=Math.min((mult-3)/15,0.15);
-    for(let i=0;i<3;i++){
-      const ag=ctx.createLinearGradient(0,H*0.1+i*H*0.08,0,H*0.2+i*H*0.08);
-      const hues=['rgba(0,229,255','rgba(168,85,247','rgba(16,185,129'];
-      ag.addColorStop(0,hues[i]+',0)');
-      ag.addColorStop(0.5,hues[i]+`,${aAlpha})`);
-      ag.addColorStop(1,hues[i]+',0)');
-      ctx.fillStyle=ag; ctx.fillRect(0,H*0.1+i*H*0.08,W,H*0.12);
-    }
-  }
-}
-
-function drawStars(W,H){
-  const speed=status==="IN_FLIGHT"?mult*0.8:0;
-  stars.forEach(s=>{
-    if(speed>0){ s.x-=s.speed*speed*0.5; if(s.x<-5){s.x=W+5;s.y=Math.random()*H*0.75;} }
-    const tw=Math.abs(Math.sin(Date.now()*0.001*(s.layer+1)+s.x));
-    ctx.globalAlpha=s.bright*(0.3+tw*0.5)*(status==="IN_FLIGHT"?Math.min(mult/3,1):0.5);
-    ctx.fillStyle='#fff'; ctx.beginPath();
-    ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
-  });
-  ctx.globalAlpha=1;
-  // Speed lines at high multiplier
-  if(status==="IN_FLIGHT"&&mult>2){
-    const lineDensity=Math.min((mult-2)*3,30)|0;
-    ctx.strokeStyle=`rgba(0,229,255,${Math.min((mult-2)*0.02,0.12)})`;
-    ctx.lineWidth=0.8;
-    for(let i=0;i<lineDensity;i++){
-      const lx=(stars[i%stars.length]?.x||Math.random()*W);
-      const ly=(stars[i%stars.length]?.y||Math.random()*H);
-      const len=8+mult*6;
-      ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(lx-len,ly); ctx.stroke();
-    }
-  }
-}
-
-function drawClouds(W,H){
-  const spd=status==="IN_FLIGHT"?mult*0.6:0.15;
-  cloudLayers.forEach(c=>{
-    c.x-=c.speed*(spd||0.15);
-    if(c.x<-c.w-80) c.x=W+80;
-    ctx.save();
-    ctx.globalAlpha=c.alpha+(status==="IN_FLIGHT"?0:0.04);
-    ctx.fillStyle='rgba(200,210,255,1)';
-    // Fluffy cloud: multiple overlapping circles
-    for(let i=0;i<5;i++){
-      const cx=c.x+i*(c.w/5), cr=c.w*0.13+Math.sin(i*1.2)*c.w*0.05;
-      ctx.beginPath(); ctx.arc(cx,c.y,cr,0,Math.PI*2); ctx.fill();
-    }
-    ctx.restore();
-  });
-}
-
-function drawMountains(W,H){
-  mountainPoints.forEach((m,mi)=>{
-    const ox=(-scrollX*m.scrollFactor)%(W+400);
-    const alpha=mi===0?0.35:0.2;
-    const color=mi===0?`rgba(15,18,40,${alpha})`:`rgba(10,14,32,${alpha})`;
-    ctx.save();
-    ctx.globalAlpha=1;
-    ctx.fillStyle=color;
-    ctx.beginPath();
-    const pts=m.pts;
-    ctx.moveTo(pts[0].x+ox,pts[0].y);
-    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x+ox,pts[i].y);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-  });
-}
-
-function drawCityscape(W,H){
-  const cityY=H*0.72;
-  const ox=(-scrollX*0.02)%(W+400);
-  buildingData.forEach(b=>{
-    const bx=((b.x+ox)%(W+200))-100;
-    const topY=cityY-b.h;
-    // Building body
-    ctx.fillStyle='rgba(8,12,28,0.85)';
-    ctx.fillRect(bx,topY,b.w,b.h);
-    // Window lights
-    if(b.lit&&status==="IN_FLIGHT"){
-      for(let wy=topY+6;wy<cityY-6;wy+=10){
-        for(let wx=bx+4;wx<bx+b.w-4;wx+=8){
-          if(Math.random()>0.5){
-            ctx.fillStyle=`rgba(255,220,100,${0.3+Math.random()*0.3})`;
-            ctx.fillRect(wx,wy,4,5);
-          }
-        }
-      }
-    }
-  });
-}
-
-function drawFlightPath(W,H){
-  // Draw a glowing curve trail behind craft
-  if(pathPoints.length<2) return;
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(pathPoints[0].x,pathPoints[0].y);
-  for(let i=1;i<pathPoints.length;i++) ctx.lineTo(pathPoints[i].x,pathPoints[i].y);
-  const glowColor=mult>5?'rgba(239,68,68,':'mult'>2?'rgba(245,158,11,':'rgba(0,229,255,';
-  ctx.strokeStyle=`rgba(0,229,255,0.15)`;
-  ctx.lineWidth=2; ctx.stroke();
-  ctx.restore();
-}
-
-let pathPoints=[];
-
-// ── CRAFT PHYSICS ──────────────────────────────────
-function updateCraftPosition(W,H){
-  if(status==="IN_FLIGHT"){
-    // X: advance but never leave safe right margin (40% of canvas)
-    const tX=Math.min(120+mult*18,W*0.42);
-    cX+=(tX-cX)*0.06;
-    // Y: rises with log(mult) — but clamped to safeTop + margin and safeBottom
-    const raw=H*0.72-(Math.log(mult+1)*H*0.19);
-    tY=Math.max(safeTop+10,Math.min(safeBottom-80,raw));
-    cY+=(tY-cY)*0.07;
-    // Record path
-    pathPoints.push({x:cX,y:cY});
-    if(pathPoints.length>60) pathPoints.shift();
-    scrollX+=mult*1.2;
-    updateEngineSound(mult);
-  } else if(status==="BETTING"){
-    cX+=(110-cX)*0.08;
-    tY=H*0.62+Math.sin(Date.now()*0.0035)*7;
-    cY+=(tY-cY)*0.1;
-    pathPoints=[];
-  }
-}
-
-// ── PREMIUM CRAFT RENDERERS ───────────────────────
-function drawCraft(W,H){
-  updateCraftPosition(W,H);
-  ctx.save();
-  // Glow halo around craft
-  const gc=mult>5?'rgba(239,68,68,0.3)':mult>2?'rgba(245,158,11,0.25)':'rgba(0,229,255,0.2)';
-  ctx.shadowBlur=30; ctx.shadowColor=gc;
-  if(vehicle==="balloon") drawBalloon(cX,cY);
-  else if(vehicle==="lwango") drawLwango(cX,cY);
-  else drawBroom(cX,cY);
-  ctx.restore();
-}
-
-function drawBalloon(x,y){
-  // ── Balloon envelope ──
-  const s=1+Math.sin(Date.now()*0.003)*0.012; // subtle breathe
-  ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
-
-  // Shadow/depth gradient
-  const bg=ctx.createRadialGradient(-8,-38,4,-5,-30,38);
-  bg.addColorStop(0,'#f43f5e'); bg.addColorStop(0.5,'#dc2626'); bg.addColorStop(1,'#7f1d1d');
-  ctx.fillStyle=bg;
-  ctx.beginPath(); ctx.ellipse(0,-32,30,36,0,0,Math.PI*2); ctx.fill();
-
-  // Stripe panels
-  const stripeColors=['#fbbf24','#f43f5e','#10b981','#3b82f6'];
-  for(let i=0;i<4;i++){
-    ctx.save(); ctx.clip();
-    ctx.fillStyle=stripeColors[i]+'44';
-    ctx.fillRect(-30+i*15,-68,15,72);
-    ctx.restore();
-  }
-  // Highlight sheen
-  const sh=ctx.createRadialGradient(-10,-48,2,-8,-40,18);
-  sh.addColorStop(0,'rgba(255,255,255,0.4)'); sh.addColorStop(1,'rgba(255,255,255,0)');
-  ctx.fillStyle=sh; ctx.beginPath(); ctx.ellipse(-8,-40,14,18,0,0,Math.PI*2); ctx.fill();
-
-  // Emblem circle
-  ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.beginPath(); ctx.arc(0,-32,11,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#fbbf24'; ctx.font='bold 13px Sora,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('K',0,-32);
-
-  // Rigging ropes
-  ctx.strokeStyle='#94a3b8'; ctx.lineWidth=1.2;
-  [[-12,-8,-14,8],[12,-8,14,8],[0,4,0,12]].forEach(([x1,y1,x2,y2])=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();});
-
-  // Burner flame
-  if(status==="IN_FLIGHT"){
-    const flk=0.7+Math.sin(Date.now()*0.02)*0.3;
-    const fg=ctx.createRadialGradient(0,4,0,0,4,10);
-    fg.addColorStop(0,'rgba(255,255,200,0.95)'); fg.addColorStop(0.4,'rgba(251,191,36,0.8)'); fg.addColorStop(1,'rgba(234,88,12,0)');
-    ctx.fillStyle=fg; ctx.beginPath(); ctx.ellipse(0,4,5*flk,10*flk,0,0,Math.PI*2); ctx.fill();
-  }
-
-  // Basket
-  ctx.fillStyle='#92400e'; ctx.fillRect(-10,10,20,15);
-  ctx.strokeStyle='#78350f'; ctx.lineWidth=1; ctx.strokeRect(-10,10,20,15);
-  // Basket weave
-  ctx.strokeStyle='rgba(120,53,15,0.5)'; ctx.lineWidth=0.8;
-  for(let wx=-10;wx<=10;wx+=5){ctx.beginPath();ctx.moveTo(wx,10);ctx.lineTo(wx,25);ctx.stroke();}
-  ctx.beginPath();ctx.moveTo(-10,17);ctx.lineTo(10,17);ctx.stroke();
-
-  // ── RIDER (pilot silhouette) ──
-  ctx.fillStyle='#1e293b'; // body
-  ctx.beginPath(); ctx.ellipse(0,8,5,6,0,0,Math.PI*2); ctx.fill(); // torso
-  ctx.beginPath(); ctx.arc(0,2,4,0,Math.PI*2); ctx.fill(); // head
-  // Goggles highlight
-  ctx.fillStyle='rgba(56,189,248,0.6)'; ctx.beginPath(); ctx.ellipse(-2,2,2.5,1.5,0,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='rgba(56,189,248,0.6)'; ctx.beginPath(); ctx.ellipse(3,2,2.5,1.5,0,0,Math.PI*2); ctx.fill();
-  // Scarf
-  ctx.strokeStyle='#ef4444'; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.moveTo(-4,5); ctx.quadraticCurveTo(0,8,4,5); ctx.stroke();
-  // Arms gripping basket edge
-  ctx.strokeStyle='#1e293b'; ctx.lineWidth=2; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(-4,8); ctx.lineTo(-9,12); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(4,8); ctx.lineTo(9,12); ctx.stroke();
-
-  ctx.restore();
-}
-
-function drawLwango(x,y){
-  ctx.save(); ctx.translate(x,y);
-  const bob=Math.sin(Date.now()*0.003)*0.015;
-  ctx.scale(1+bob,1-bob);
-
-  // Large woven basket (Lwango) — dome shape
-  const lg=ctx.createRadialGradient(-6,-10,4,-4,-8,34);
-  lg.addColorStop(0,'#d97706'); lg.addColorStop(0.6,'#b45309'); lg.addColorStop(1,'#78350f');
-  ctx.fillStyle=lg;
-  ctx.beginPath(); ctx.ellipse(0,-4,30,22,0,0,Math.PI,true); ctx.closePath(); ctx.fill();
-
-  // Weave pattern
-  ctx.save(); ctx.clip();
-  ctx.strokeStyle='rgba(146,64,14,0.6)'; ctx.lineWidth=1.2;
-  for(let i=-30;i<=30;i+=8){ ctx.beginPath(); ctx.moveTo(i,-26); ctx.lineTo(i,4); ctx.stroke(); }
-  for(let j=-20;j<=5;j+=7){ ctx.beginPath(); ctx.moveTo(-32,j); ctx.lineTo(32,j); ctx.stroke(); }
-  ctx.restore();
-
-  // Rim glow
-  ctx.strokeStyle='rgba(251,191,36,0.6)'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.ellipse(0,-4,30,22,0,Math.PI,Math.PI*2); ctx.stroke();
-
-  // Ropes to lift ring above
-  ctx.strokeStyle='#a8a29e'; ctx.lineWidth=1.2;
-  [[-18,-4,-24,-28],[18,-4,24,-28],[0,-26,0,-36]].forEach(([x1,y1,x2,y2])=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();});
-
-  // Gas burner nozzle
-  ctx.fillStyle='#6b7280'; ctx.fillRect(-3,-36,6,8);
-  if(status==="IN_FLIGHT"){
-    const fg=ctx.createRadialGradient(0,-40,0,0,-40,12);
-    fg.addColorStop(0,'rgba(255,240,150,0.95)'); fg.addColorStop(0.5,'rgba(251,146,60,0.7)'); fg.addColorStop(1,'rgba(234,88,12,0)');
-    ctx.fillStyle=fg; ctx.beginPath(); ctx.ellipse(0,-40,5,12,0,0,Math.PI*2); ctx.fill();
-  }
-
-  // ── RIDER ──
-  ctx.fillStyle='#1e293b';
-  ctx.beginPath(); ctx.ellipse(0,4,4,5,0,0,Math.PI*2); ctx.fill(); // torso
-  ctx.beginPath(); ctx.arc(0,-1,3.5,0,Math.PI*2); ctx.fill(); // head
-  // Traditional hat (flat circle)
-  ctx.fillStyle='#78350f';
-  ctx.beginPath(); ctx.ellipse(0,-4.5,6,2,0,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#92400e'; ctx.beginPath(); ctx.arc(0,-5,2,0,Math.PI*2); ctx.fill();
-  // Face detail
-  ctx.fillStyle='rgba(251,191,36,0.5)'; ctx.beginPath(); ctx.arc(-1.5,-1,1,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='rgba(251,191,36,0.5)'; ctx.beginPath(); ctx.arc(1.5,-1,1,0,Math.PI*2); ctx.fill();
-
-  ctx.restore();
-}
-
-function drawBroom(x,y){
-  ctx.save(); ctx.translate(x,y);
-  const tilt=-0.18+(status==="IN_FLIGHT"?-0.08:0);
-  ctx.rotate(tilt);
-
-  // Broom handle — polished wood
-  const hg=ctx.createLinearGradient(-36,0,30,-8);
-  hg.addColorStop(0,'#854d0e'); hg.addColorStop(0.5,'#a16207'); hg.addColorStop(1,'#854d0e');
-  ctx.strokeStyle=hg; ctx.lineWidth=5; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(-36,6); ctx.lineTo(30,-4); ctx.stroke();
-  // Handle shine
-  ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.moveTo(-30,4); ctx.lineTo(26,-2); ctx.stroke();
-
-  // Bristles — layered for volume
-  const bristleColors=['#ca8a04','#a16207','#854d0e'];
-  bristleColors.forEach((c,bi)=>{
-    ctx.fillStyle=c;
-    ctx.beginPath();
-    ctx.moveTo(-38+bi*2,4+bi*2);
-    ctx.lineTo(-52+bi,-4+bi);
-    ctx.lineTo(-54+bi,10+bi*2);
-    ctx.closePath(); ctx.fill();
-  });
-  // Bristle sparkle
-  if(status==="IN_FLIGHT"){
-    for(let i=0;i<4;i++){
-      const px=-48+Math.random()*14, py=-2+Math.random()*12;
-      ctx.fillStyle=`rgba(168,85,247,${0.4+Math.random()*0.4})`;
-      ctx.beginPath(); ctx.arc(px,py,1+Math.random()*1.5,0,Math.PI*2); ctx.fill();
-    }
-  }
-
-  // Binding ribbon
-  ctx.strokeStyle='#dc2626'; ctx.lineWidth=2.5;
-  ctx.beginPath(); ctx.moveTo(-34,5); ctx.lineTo(-32,8); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-30,4); ctx.lineTo(-28,7); ctx.stroke();
-
-  // ── RIDER ──
-  // Straddling position: rider sits on handle
-  ctx.save(); ctx.rotate(-tilt*0.5);
-  ctx.fillStyle='#1e293b';
-  ctx.beginPath(); ctx.ellipse(4,-10,5,7,0.3,0,Math.PI*2); ctx.fill(); // body
-  ctx.beginPath(); ctx.arc(6,-18,4.5,0,Math.PI*2); ctx.fill(); // head
-  // Wizard hat!
-  ctx.fillStyle='#4c1d95';
-  ctx.beginPath(); ctx.moveTo(6,-22); ctx.lineTo(2,-36); ctx.lineTo(10,-36); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#6d28d9'; ctx.beginPath(); ctx.ellipse(6,-22,6,2,0,0,Math.PI*2); ctx.fill();
-  // Hat star
-  ctx.fillStyle='#fbbf24'; ctx.font='7px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('★',6,-30);
-  // Robe flapping
-  ctx.fillStyle='#1e3a5f';
-  ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo(-8,4); ctx.lineTo(4,2); ctx.closePath(); ctx.fill();
-  // Goggles
-  ctx.strokeStyle='#38bdf8'; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.arc(4,-18,2.5,0,Math.PI*2); ctx.stroke();
-  ctx.beginPath(); ctx.arc(8,-18,2.5,0,Math.PI*2); ctx.stroke();
-  // Scarf streaming back
-  ctx.strokeStyle='#ef4444'; ctx.lineWidth=2; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(2,-14);
-  ctx.quadraticCurveTo(-5,-18,-14,-16); ctx.stroke();
-  ctx.restore();
-  ctx.restore();
-}
-
-// ── PARTICLES ─────────────────────────────────────
-function spawnTrail(){
-  if(status!=="IN_FLIGHT") return;
-  const colors=vehicle==="broom"
-    ?['rgba(168,85,247,0.8)','rgba(196,131,68,0.6)','rgba(255,255,200,0.9)']
-    :['rgba(0,229,255,0.9)','rgba(255,255,255,0.6)','rgba(16,185,129,0.7)'];
-  for(let i=0;i<3;i++){
-    particles.push({
-      x:cX-18+Math.random()*6, y:cY+(vehicle==="balloon"?18:2)+Math.random()*6,
-      vx:-(Math.random()*3+mult*0.4), vy:(Math.random()-0.5)*1.5,
-      r:Math.random()*3+1, color:colors[i%colors.length],
-      a:1, decay:0.018+Math.random()*0.015, glow:true
-    });
-  }
-}
-
-function triggerExplosion(x,y){
-  // Debris
-  for(let i=0;i<60;i++){
-    const a=Math.random()*Math.PI*2, speed=Math.random()*10+2;
-    particles.push({
-      x,y, vx:Math.cos(a)*speed, vy:Math.sin(a)*speed,
-      r:Math.random()*7+2,
-      color:Math.random()>0.4?'rgba(239,68,68,0.9)':'rgba(245,158,11,0.9)',
-      a:1, decay:Math.random()*0.025+0.012, glow:true
-    });
-  }
-  // Shockwave ring
-  shockwaves.push({x,y,r:0,maxR:200,a:0.7});
-  // Screen shake
-  canvas.style.animation='none'; canvas.offsetHeight;
-  canvas.style.animation='screenShake 0.4s ease';
-}
-
-function triggerCoinBurst(x,y,amount){
-  const count=Math.min(20,Math.floor(amount/10)+8);
-  for(let i=0;i<count;i++){
-    const a=Math.random()*Math.PI*2;
-    const speed=Math.random()*6+2;
-    coinBursts.push({
-      x,y, vx:Math.cos(a)*speed, vy:Math.sin(a)*speed-3,
-      r:6+Math.random()*4, a:1, decay:0.018,
-      label:'K', color:'#fbbf24'
-    });
-  }
-  shockwaves.push({x,y,r:0,maxR:120,a:0.5,color:'rgba(251,191,36,'});
-}
-
-function drawParticles(){
-  particles.forEach(p=>{
-    p.x+=p.vx; p.y+=p.vy; p.a-=p.decay; p.vy+=0.04;
-    if(p.a<=0) return;
-    ctx.save(); ctx.globalAlpha=Math.max(0,p.a);
-    if(p.glow){ctx.shadowBlur=10; ctx.shadowColor=p.color;}
-    ctx.fillStyle=p.color;
-    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
-    ctx.restore();
-  });
-  particles=particles.filter(p=>p.a>0);
-}
-
-function drawShockwaves(){
-  shockwaves.forEach(sw=>{
-    sw.r+=8; sw.a-=0.03;
-    if(sw.a<=0) return;
-    ctx.save(); ctx.globalAlpha=sw.a;
-    ctx.strokeStyle=(sw.color||'rgba(0,229,255,')+sw.a+')';
-    ctx.lineWidth=2; ctx.beginPath(); ctx.arc(sw.x,sw.y,sw.r,0,Math.PI*2); ctx.stroke();
-    ctx.restore();
-  });
-  shockwaves=shockwaves.filter(sw=>sw.a>0);
-}
-
-function drawCoinBursts(){
-  coinBursts.forEach(c=>{
-    c.x+=c.vx; c.y+=c.vy; c.vy+=0.15; c.a-=c.decay;
-    if(c.a<=0) return;
-    ctx.save(); ctx.globalAlpha=Math.max(0,c.a);
-    ctx.shadowBlur=12; ctx.shadowColor='rgba(251,191,36,0.8)';
-    // Coin circle
-    ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='#92400e'; ctx.beginPath(); ctx.arc(c.x,c.y,c.r*0.7,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle=c.color; ctx.font=`bold ${c.r}px sans-serif`;
-    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(c.label,c.x,c.y);
-    ctx.restore();
-  });
-  coinBursts=coinBursts.filter(c=>c.a>0);
-}
-
-// Trail spawner (runs in rAF)
-let lastTrailTime=0;
-function maybeSeedEffects(){
-  const now=Date.now();
-  if(status==="IN_FLIGHT"&&now-lastTrailTime>40){
-    spawnTrail(); lastTrailTime=now;
-  }
-}
-// Patch render loop to also call effects
-const _frame=frame;
-function enhancedFrame(){
-  maybeSeedEffects();
-  _frame(); // This won't work due to closure — rewrite below
-}
-
-// ── MILESTONE SYSTEM ──────────────────────────────
-const milestones=[2,3,5,10,20,50,100];
-let reachedMilestones=new Set();
-
-function checkMilestones(m){
-  milestones.forEach(ms=>{
-    if(m>=ms&&!reachedMilestones.has(ms)){
-      reachedMilestones.add(ms);
-      showMilestoneFlash(ms);
-      playMilestone();
-      // Big coin burst
-      triggerCoinBurst(cX,cY,ms*10);
-      // Extra screen shockwave
-      shockwaves.push({x:cX,y:cY,r:0,maxR:300,a:0.4});
-    }
-  });
-}
-
-function showMilestoneFlash(ms){
-  const el=document.getElementById('milestone-flash');
-  const labels={2:'🚀 2× ALTITUDE!',3:'⚡ 3× POWER!',5:'🔥 5× BLAZE!',10:'💎 10× DIAMOND!',20:'👑 20× ROYALTY!',50:'🌙 50× MOON!',100:'🪐 100× LEGEND!'};
-  el.textContent=labels[ms]||`${ms}× MILESTONE!`;
-  el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'),1800);
-}
-
-// ── COUNTDOWN ─────────────────────────────────────
-let cdInterval=null, cdSecs=0;
-const CIRC=138.23;
-
-function startCountdown(secs){
-  stopCountdown(); cdSecs=secs;
-  document.getElementById('cd').classList.add('vis');
-  document.getElementById('cdf').dataset.total=secs;
-  updateCD(secs);
-  cdInterval=setInterval(()=>{
-    cdSecs--;
-    if(cdSecs<=0){stopCountdown();}
-    else{updateCD(cdSecs); playCountdownTick(cdSecs);}
-  },1000);
-}
-
-function stopCountdown(){
-  if(cdInterval){clearInterval(cdInterval);cdInterval=null;}
-  document.getElementById('cd').classList.remove('vis');
-}
-
-function updateCD(s){
-  document.getElementById('cdn').textContent=s;
-  const total=parseInt(document.getElementById('cdf').dataset.total||s);
-  const off=CIRC*(1-s/total);
-  const fill=document.getElementById('cdf');
-  fill.style.strokeDashoffset=off;
-  fill.style.stroke=s<=2?'var(--red)':s<=3?'var(--amber)':'var(--cyan)';
-}
-
-// ── UI STATE ──────────────────────────────────────
-const mt=document.getElementById('mt');
-const sl=document.getElementById('sl');
-const AB=document.getElementById('AB');
-const BI=document.getElementById('BI');
-const BD=document.getElementById('BD');
-const LS=document.getElementById('LS');
-
-function setBalance(){
-  BD.textContent='ZK '+balance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-}
-function log(txt){
-  const e=document.createElement('div'); e.className='le';
-  e.innerHTML=`<span style="color:var(--muted);flex-shrink:0">[${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}]</span><span>${txt}</span>`;
-  LS.prepend(e);
-  if(LS.children.length>15) LS.lastChild.remove();
-}
-
-// ── SOCKET LISTENERS ──────────────────────────────
+// ── Socket ────────────────────────────────────────
 function wire(){
-  socket.on('initial_state',d=>{
-    balance=d.balance; setBalance();
-    log('Systems online. Ready for departure.');
-  });
-  socket.on('connect_error',e=>{
-    status="CONNECTING"; sl.innerText='Connection failed';
-    AB.className='ab bdis'; AB.innerText='RECONNECTING...';
-    BI.setAttribute('disabled','true'); stopCountdown(); stopEngineSound();
-  });
-  socket.on('disconnect',()=>{
-    status="CONNECTING"; sl.innerText='Disconnected';
-    AB.className='ab bdis'; AB.innerText='RECONNECTING...';
-    BI.setAttribute('disabled','true'); stopCountdown(); stopEngineSound();
-  });
+  socket.on('initial_state',d=>{setBalance(d.balance);log('✅ Systems online. Ready for departure.');});
+  socket.on('balance_update',d=>{setBalance(d.balance);log('💰 Balance updated: ZK '+d.balance.toFixed(2));});
+  socket.on('connect_error',()=>{gameStatus='CONNECTING';sl.innerText='Connection failed';AB.className='ab bdis';AB.innerText='RECONNECTING...';BI.setAttribute('disabled','true');stopCD();stopEngine();});
+  socket.on('disconnect',()=>{gameStatus='CONNECTING';sl.innerText='Disconnected';AB.className='ab bdis';AB.innerText='RECONNECTING...';BI.setAttribute('disabled','true');stopCD();stopEngine();});
   socket.on('error_message',d=>alert(d.message));
-
   socket.on('betting_phase_started',d=>{
-    status="BETTING"; betState="NONE"; mult=1;
-    mt.innerText='1.00x'; mt.style.color='var(--text)'; mt.style.textShadow='';
-    reachedMilestones=new Set();
-    const cdSec=(d&&d.countdown)?d.countdown:5;
-    sl.innerText='Next flight in';
-    startCountdown(cdSec);
-    AB.className='ab bbet'; AB.innerText='BUY FLIGHT TICKET';
+    gameStatus='BETTING';betState='NONE';mult=1;
+    mt.innerText='1.00x';mt.style.color='var(--text)';mt.style.textShadow='';
+    reached=new Set();
+    const s=(d&&d.countdown)?d.countdown:7;
+    sl.innerText='Next flight in';startCD(s);
+    AB.className='ab bbet';AB.innerText='BUY FLIGHT TICKET';
     BI.removeAttribute('disabled');
     document.getElementById('VCB').classList.remove('locked');
-    stopEngineSound();
+    stopEngine();
+    document.getElementById('low-nudge').classList.toggle('show', walletBalance < 10);
   });
-
   socket.on('bet_confirmed',d=>{
-    betState="PLACED";
-    balance=d.newBalance!==undefined?d.newBalance:d.balance;
-    setBalance();
-    AB.className='ab bdis'; AB.innerText='TICKET SECURED!';
+    betState='PLACED';setBalance(d.newBalance);
+    AB.className='ab bdis';AB.innerText='TICKET SECURED!';
     BI.setAttribute('disabled','true');
     document.getElementById('VCB').classList.add('locked');
-    log('Your craft registration approved.');
-    playBetPlace();
-    // Mini shockwave at craft
-    shockwaves.push({x:cX,y:cY,r:0,maxR:60,a:0.5});
+    log('Your craft registration approved!');sfxBet();
+    shockwaves.push({x:cX,y:cY,r:0,maxR:55,a:0.5,col:'rgba(16,185,129,'});
+    document.getElementById('low-nudge').classList.remove('show');
   });
-
   socket.on('game_started',()=>{
-    status="IN_FLIGHT"; stopCountdown(); sl.innerText='';
-    if(betState==="PLACED"){
-      AB.className='ab bco';
-      AB.innerText=`CASH OUT (ZK ${(betAmt*1).toFixed(2)})`;
-    } else {
-      AB.className='ab bdis'; AB.innerText='FLIGHT IN PROGRESS';
-    }
-    log('🚀 Lift-off! Good luck pilots!');
-    startEngineSound();
+    gameStatus='IN_FLIGHT';stopCD();sl.innerText='';
+    if(betState==='PLACED'){AB.className='ab bco';AB.innerText=`CASH OUT (ZK ${(betAmt*1).toFixed(2)})`;}
+    else{AB.className='ab bdis';AB.innerText='FLIGHT IN PROGRESS';}
+    log('🚀 Lift-off! Good luck pilots!');startEngine();
   });
-
-socket.on('multiplier_tick', d => {
-    // ── MID-ROUND CATCH-UP ─────────────────────────────────
-    if (status !== "IN_FLIGHT") {
-      // Don't override if the round just crashed or is taking bets
-      if (status === "CRASHED" || status === "BETTING") return;
-
-      // Force state to live flight
-      status = "IN_FLIGHT";
-      sl.innerText = ''; // Clear "Boarding..." or "Connecting..." text
-      
-      // Lock the action button for spectators
-      AB.className = 'ab bdis'; 
-      AB.innerText = 'FLIGHT IN PROGRESS';
-      startEngineSound();
-
-      // Fast-forward craft position & rebuild flight path history
-      // This prevents the balloon from aggressively snapping from the origin
-      pathPoints = [];
-      const dpr = window.devicePixelRatio || 1;
-      const W = canvas.width / dpr;
-      const H = canvas.height / dpr;
-      
-      let tempCX = 100;
-      let tempCY = H * 0.62;
-      
-      // Simulate previous frames to generate the glowing trail line
-      for (let m = 1.0; m <= d.multiplier; m += 0.05) {
-        const tX = Math.min(120 + m * 18, W * 0.42);
-        tempCX += (tX - tempCX) * 0.06;
-        
-        const raw = H * 0.72 - (Math.log(m + 1) * H * 0.19);
-        const tY = Math.max(safeTop + 10, Math.min(safeBottom - 80, raw));
-        tempCY += (tY - tempCY) * 0.07;
-        
-        pathPoints.push({ x: tempCX, y: tempCY });
-      }
-      
-      // Snap craft to the final caught-up coordinates
-      cX = tempCX;
-      cY = tempCY;
-    }
-
-    // ── STANDARD LIVE TICK ─────────────────────────────────
-    mult = d.multiplier;
-    mt.innerText = mult.toFixed(2) + 'x';
-    checkMilestones(mult);
-    
-    if (mult > 10) {
-      mt.style.color = 'var(--red)';
-      mt.style.textShadow = '0 0 30px rgba(239,68,68,0.8)';
-    } else if (mult > 5) {
-      mt.style.color = 'var(--red)';
-      mt.style.textShadow = '0 0 20px rgba(239,68,68,0.5)';
-    } else if (mult > 2) {
-      mt.style.color = 'var(--amber)';
-      mt.style.textShadow = '0 0 16px rgba(245,158,11,0.5)';
-    } else {
-      mt.style.color = 'var(--green)';
-      mt.style.textShadow = '0 0 12px rgba(16,185,129,0.4)';
-    }
-    
-    if (betState === "PLACED") AB.innerText = `CASH OUT (ZK ${(betAmt * mult).toFixed(2)})`;
+  socket.on('multiplier_tick',d=>{
+    if(gameStatus!=='IN_FLIGHT')return;
+    mult=d.multiplier;mt.innerText=mult.toFixed(2)+'x';checkMilestones(mult);
+    if(mult>10){mt.style.color='var(--red)';mt.style.textShadow='0 0 30px rgba(239,68,68,0.85)';}
+    else if(mult>5){mt.style.color='#f87171';mt.style.textShadow='0 0 20px rgba(239,68,68,0.55)';}
+    else if(mult>2){mt.style.color='var(--amber)';mt.style.textShadow='0 0 16px rgba(245,158,11,0.5)';}
+    else{mt.style.color='var(--green)';mt.style.textShadow='0 0 12px rgba(16,185,129,0.4)';}
+    if(betState==='PLACED')AB.innerText=`CASH OUT (ZK ${(betAmt*mult).toFixed(2)})`;
   });
-
   socket.on('cash_out_success',d=>{
-    betState="CASHED_OUT";
-    balance=d.newBalance!==undefined?d.newBalance:d.balance;
-    setBalance();
-    AB.className='ab bdis'; AB.innerText='EARNINGS SECURED';
-    const payout=d.payout!==undefined?d.payout:d.winnings;
+    betState='CASHED_OUT';setBalance(d.newBalance);
+    AB.className='ab bdis';AB.innerText='EARNINGS SECURED';
+    const payout=d.payout;
     document.getElementById('CPD').innerText=`You earned ZK ${payout.toFixed(2)}`;
-    const ct=document.getElementById('ct'); ct.classList.add('vis');
-    setTimeout(()=>ct.classList.remove('vis'),2500);
-    const ws=document.getElementById('ws');
+    const ct=document.getElementById('ct');ct.classList.add('vis');setTimeout(()=>ct.classList.remove('vis'),2600);
     document.getElementById('wsa').innerText=`+ ZK ${payout.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-    ws.classList.add('show'); setTimeout(()=>ws.classList.remove('show'),2800);
-    playCashout();
-    triggerCoinBurst(cX,cY,payout);
-    if(navigator.vibrate) navigator.vibrate([40,50,80,50,40]);
-    const at=d.atMultiplier!==undefined?d.atMultiplier:mult;
-    log(`✅ Secured at ${at.toFixed(2)}x — ZK ${payout.toFixed(2)}`);
-    stopEngineSound();
+    const ws=document.getElementById('ws');ws.classList.add('show');setTimeout(()=>ws.classList.remove('show'),2800);
+    sfxCashout();coinBurst(cX,cY,payout);
+    if(navigator.vibrate)navigator.vibrate([40,50,80,50,40]);
+    log(`✅ Secured at ${d.atMultiplier.toFixed(2)}x — ZK ${payout.toFixed(2)}`);
+    stopEngine();
+    // Refresh tx history if wallet is open
+    if(document.getElementById('WO').classList.contains('show'))loadTxHistory();
   });
-
   socket.on('game_crashed',d=>{
-    status="CRASHED"; stopCountdown(); stopEngineSound();
+    gameStatus='CRASHED';stopCD();stopEngine();
     sl.innerText='FLIGHT TERMINATED';
     mt.innerText='CRASHED @'+d.crashedAt.toFixed(2)+'x';
-    mt.style.color='var(--red)';
-    mt.style.textShadow='0 0 30px rgba(239,68,68,0.9)';
-    AB.className='ab bdis'; AB.innerText='CRAFT LOST';
+    mt.style.color='var(--red)';mt.style.textShadow='0 0 30px rgba(239,68,68,0.9)';
+    AB.className='ab bdis';AB.innerText='CRAFT LOST';
     BI.setAttribute('disabled','true');
-    triggerExplosion(cX,cY);
-    playCrash();
-    if(navigator.vibrate) navigator.vibrate([100,50,200]);
+    explode(cX,cY);sfxCrash();
+    if(navigator.vibrate)navigator.vibrate([80,40,200]);
     log(`💥 Craft lost at ${d.crashedAt.toFixed(2)}x`);
   });
-
-  socket.on('ledger_update',d=>{
-    if(typeof d==='string') log(d);
-    else if(d&&d.message) log(d.message);
-  });
+  socket.on('ledger_update',d=>{if(typeof d==='string')log(d);else if(d&&d.message)log(d.message);});
 }
 
-// ── VEHICLE SELECTOR ──────────────────────────────
-function setupVehicleSelector(){
-  const vs=document.getElementById('VS');
-  const vcb=document.getElementById('VCB');
-  const vp=document.getElementById('VP');
-  const ce=document.getElementById('CE');
-  const vn=document.getElementById('VN');
-  const locked=()=>status==="IN_FLIGHT"&&betState==="PLACED";
+// ── Vehicle Selector ──────────────────────────────
+function setupVS(){
+  const vs=document.getElementById('VS'),vcb=document.getElementById('VCB'),vp=document.getElementById('VP');
+  const ce=document.getElementById('CE'),vn=document.getElementById('VN');
+  const locked=()=>gameStatus==='IN_FLIGHT'&&betState==='PLACED';
   const close=()=>{vp.classList.remove('open');vs.classList.remove('open');};
-  vcb.addEventListener('click',()=>{
-    if(locked()) return;
-    vp.classList.toggle('open'); vs.classList.toggle('open');
-  });
-  document.querySelectorAll('.vo').forEach(o=>{
-    o.addEventListener('click',()=>{
-      if(locked()) return;
-      document.querySelectorAll('.vo').forEach(x=>x.classList.remove('active'));
-      o.classList.add('active');
-      vehicle=o.dataset.v; ce.textContent=o.dataset.e; vn.textContent=o.dataset.n;
-      close();
-    });
-  });
-  document.addEventListener('click',e=>{if(!vs.contains(e.target)) close();});
+  vcb.addEventListener('click',()=>{if(locked())return;vp.classList.toggle('open');vs.classList.toggle('open');});
+  document.querySelectorAll('.vo').forEach(o=>o.addEventListener('click',()=>{if(locked())return;document.querySelectorAll('.vo').forEach(x=>x.classList.remove('active'));o.classList.add('active');vehicle=o.dataset.v;ce.textContent=o.dataset.e;vn.textContent=o.dataset.n;close();}));
+  document.addEventListener('click',e=>{if(!vs.contains(e.target))close();});
 }
 
-// ── ACTION BUTTON ─────────────────────────────────
-document.getElementById('AB').addEventListener('click',()=>{
-  // Resume audio context on user gesture
-  try{getAudio().resume();}catch(e){}
-  if(status==="BETTING"&&betState==="NONE"){
+AB.addEventListener('click',()=>{
+  resumeAC();
+  if(gameStatus==='BETTING'&&betState==='NONE'){
     const amt=parseInt(BI.value);
-    if(isNaN(amt)||amt<=0||amt>balance){alert('Enter a valid amount within your balance.');return;}
-    betAmt=amt;
-    socket.emit('place_bet',{amount:amt,vehicle});
-  } else if(status==="IN_FLIGHT"&&betState==="PLACED"){
+    if(isNaN(amt)||amt<=0){alert('Enter a valid bet amount.');return;}
+    if(amt>walletBalance){openWallet('deposit');return;}
+    betAmt=amt;socket.emit('place_bet',{amount:amt,vehicle});
+  }else if(gameStatus==='IN_FLIGHT'&&betState==='PLACED'){
     socket.emit('cash_out');
   }
 });
 
-// ── SAVE PROGRESS MODAL ───────────────────────────
-function setupSave(){
-  const spo=document.getElementById('SPO');
-  document.getElementById('spb').addEventListener('click',()=>{document.getElementById('SPS').innerText='';spo.classList.add('show');});
-  document.getElementById('spca').addEventListener('click',()=>spo.classList.remove('show'));
-  spo.addEventListener('click',e=>{if(e.target===spo)spo.classList.remove('show');});
-  document.getElementById('spc').addEventListener('click',async()=>{
-    const em=document.getElementById('SE').value.trim();
-    const pw=document.getElementById('SPW').value;
-    if(!em||!pw){document.getElementById('SPS').innerText='Please enter email and password.';return;}
-    document.getElementById('spc').disabled=true; document.getElementById('spc').innerText='Saving...';
-    const{error}=await supabaseClient.auth.updateUser({email:em,password:pw});
-    if(error){document.getElementById('SPS').innerText=error.message;document.getElementById('spc').disabled=false;document.getElementById('spc').innerText='Save account';}
-    else{document.getElementById('SPS').style.color='#34d399';document.getElementById('SPS').innerText='Check email to confirm!';document.getElementById('spc').innerText='Saved!';setTimeout(()=>spo.classList.remove('show'),1800);}
+// ── Connect ───────────────────────────────────────
+function connect(){
+  sl.innerText='Connecting...';
+  socket=io(SERVER,{auth:{token:PLAYER_ID}});
+  wire();
+  socket.on('connect',()=>log('🟢 Connected.'));
+}
+
+// ══════════════════════════════════════════════════
+//  WALLET SYSTEM
+// ══════════════════════════════════════════════════
+
+let depNet='airtel', wdNet='airtel', ussdTimer=null, pendingTxRef=null;
+
+function openWallet(tab='deposit'){
+  document.getElementById('WO').classList.add('show');
+  wSwitchTab(tab);
+  loadTxHistory();
+}
+function closeWallet(){document.getElementById('WO').classList.remove('show');}
+function handleWOverlay(e){if(e.target===document.getElementById('WO'))closeWallet();}
+
+function wSwitchTab(name){
+  ['deposit','withdraw','history'].forEach(t=>{
+    document.getElementById('wtab-'+t).classList.toggle('active',t===name);
+    document.getElementById('wpanel-'+t).classList.toggle('active',t===name);
   });
 }
 
-// ── SUPABASE + CONNECT ─────────────────────────────
-const supabaseUrl='https://uccdevvfexfpxnnwtpxa.supabase.co';
-const supabaseKey='sb_publishable_cy9uVdq593I0sq2Q0x53Wg_k3Liixp_';
-const supabaseClient=supabase.createClient(supabaseUrl,supabaseKey);
+function selDepNet(n){depNet=n;['airtel','mtn'].forEach(x=>document.getElementById('dnet-'+x).classList.toggle('sel',x===n));onDepInput();}
+function selWdNet(n){wdNet=n;['airtel','mtn'].forEach(x=>document.getElementById('wnet-'+x).classList.toggle('sel',x===n));onWdInput();}
 
-async function connect(){
-  sl.innerText='Boarding...';
-  let{data:{session}}=await supabaseClient.auth.getSession();
-  if(!session){
-    const{data,error}=await supabaseClient.auth.signInAnonymously();
-    if(error){sl.innerText='Sign-in failed: '+error.message;return;}
-    session=data.session;
+function setAmt(panel,val){
+  if(panel==='d'){
+    const v=val==='all'?walletBalance:val;
+    document.getElementById('d-amt').value=v;
+    document.querySelectorAll('#wpanel-deposit .chip').forEach(c=>c.classList.toggle('sel',parseFloat(c.textContent.replace(/[^0-9.]/g,''))===v));
+    onDepInput();
+  }else{
+    const v=val==='all'?walletBalance:val;
+    document.getElementById('w-amt').value=v;
+    document.querySelectorAll('#wpanel-withdraw .chip').forEach(c=>c.classList.toggle('sel',c.id==='chip-all'?val==='all':parseFloat(c.textContent.replace(/[^0-9.]/g,''))===v));
+    onWdInput();
   }
-  socket=io(SERVER_URL,{auth:{token:session.access_token}});
-  wire();
 }
 
-// ── MAIN RENDER LOOP (final) ──────────────────────
-function mainLoop(){
-  const dpr=window.devicePixelRatio||1;
-  const W=canvas.width/dpr, H=canvas.height/dpr;
-  ctx.clearRect(0,0,W,H);
-  drawSky(W,H);
-  drawStars(W,H);
-  drawClouds(W,H);
-  drawMountains(W,H);
-  drawCityscape(W,H);
-  // Flight path glow
-  if(status==="IN_FLIGHT"&&pathPoints.length>1){
-    ctx.save(); ctx.beginPath();
-    ctx.moveTo(pathPoints[0].x,pathPoints[0].y);
-    for(let i=1;i<pathPoints.length;i++) ctx.lineTo(pathPoints[i].x,pathPoints[i].y);
-    const glowC=mult>5?'rgba(239,68,68,0.2)':mult>2?'rgba(245,158,11,0.18)':'rgba(0,229,255,0.15)';
-    ctx.strokeStyle=glowC; ctx.lineWidth=3; ctx.stroke(); ctx.restore();
-  }
-  drawShockwaves();
-  drawParticles();
-  drawCoinBursts();
-  // Craft + effects
-  if(status!=="CRASHED") drawCraft(W,H);
-  requestAnimationFrame(mainLoop);
+function onDepInput(){
+  const amt=parseFloat(document.getElementById('d-amt').value)||0;
+  const phone=document.getElementById('d-phone').value.trim();
+  const btn=document.getElementById('d-btn');
+  const warn=document.getElementById('d-warn');
+  const fees=document.getElementById('d-fees');
+  const valid=amt>=10&&amt<=10000&&phone.length>=9;
+  btn.disabled=!valid;
+  if(amt>10000){warn.textContent='⚠ Maximum deposit is ZK 10,000';warn.className='f-warn over';}
+  else if(amt>0&&amt<10){warn.textContent='Minimum deposit is ZK 10';warn.className='f-warn over';}
+  else{warn.textContent='';warn.className='f-warn';}
+  if(amt>=10){
+    const fee=Math.round(amt*0.014*100)/100;const net=Math.round((amt-fee)*100)/100;
+    document.getElementById('df-send').textContent='ZK '+amt.toFixed(2);
+    document.getElementById('df-fee').textContent='ZK '+fee.toFixed(2);
+    document.getElementById('df-net').textContent='ZK '+Math.max(0,net).toFixed(2);
+    fees.classList.add('show');
+  }else{fees.classList.remove('show');}
 }
 
-// ── INIT ──────────────────────────────────────────
+function onWdInput(){
+  const amt=parseFloat(document.getElementById('w-amt').value)||0;
+  const phone=document.getElementById('w-phone').value.trim();
+  const btn=document.getElementById('w-btn');
+  const warn=document.getElementById('w-warn');
+  const fees=document.getElementById('w-fees');
+  const valid=amt>=10&&amt<=walletBalance&&phone.length>=9;
+  btn.disabled=!valid;
+  if(amt>walletBalance){warn.textContent=`⚠ Exceeds balance of ZK ${walletBalance.toFixed(2)}`;warn.className='f-warn over';}
+  else if(amt>0&&amt<10){warn.textContent='Minimum withdrawal is ZK 10';warn.className='f-warn over';}
+  else{warn.textContent='';warn.className='f-warn';}
+  if(amt>=10&&amt<=walletBalance){
+    document.getElementById('wf-amt').textContent='ZK '+amt.toFixed(2);
+    document.getElementById('wf-fee').textContent='ZK 3.00';
+    document.getElementById('wf-net').textContent='ZK '+Math.max(0,amt-3).toFixed(2);
+    fees.classList.add('show');
+  }else{fees.classList.remove('show');}
+}
+
+async function doDeposit(){
+  const amt=parseFloat(document.getElementById('d-amt').value);
+  const phone=document.getElementById('d-phone').value.trim();
+  const btn=document.getElementById('d-btn');
+  btn.disabled=true;
+  showSMsg('d','pending','Sending prompt to your phone...');
+  try{
+    const res=await fetch(`${SERVER}/api/deposit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({player_id:PLAYER_ID,amount:amt,phone:phone.replace(/\s/g,''),operator:depNet,currency:'ZMW'})});
+    const data=await res.json();
+    if(data.status==='pending'){
+      pendingTxRef=data.tx_ref;
+      document.getElementById('ussd-ph').textContent=phone;
+      document.getElementById('ussd-net').textContent=depNet==='airtel'?'Airtel Money':'MTN MoMo';
+      document.getElementById('d-ussd').classList.add('show');
+      showSMsg('d','pending','Waiting for your phone approval...');
+      startUssdTimer(120,data.tx_ref);
+    }else{
+      showSMsg('d','error',data.message||'Payment failed. Please try again.');
+      btn.disabled=false;
+    }
+  }catch(e){showSMsg('d','error','Could not reach payment server. Check connection.');btn.disabled=false;}
+}
+
+function startUssdTimer(secs,txRef){
+  let rem=secs;
+  clearInterval(ussdTimer);
+  const fill=document.getElementById('ussd-fill');
+  ussdTimer=setInterval(async()=>{
+    rem--;
+    document.getElementById('ussd-cd').textContent=rem+'s';
+    fill.style.width=(rem/secs*100)+'%';
+    // Poll every 5 seconds
+    if(txRef&&rem%5===0){
+      try{
+        const r=await fetch(`${SERVER}/api/verify-payment?tx_ref=${txRef}&player_id=${PLAYER_ID}`);
+        const d=await r.json();
+        if(d.status==='successful'){
+          clearInterval(ussdTimer);
+          onDepositSuccess(d.amount||d.newBalance);
+          return;
+        }
+      }catch(e){}
+    }
+    if(rem<=0){
+      clearInterval(ussdTimer);
+      document.getElementById('d-ussd').classList.remove('show');
+      showSMsg('d','error','Payment timed out. Please try again.');
+      document.getElementById('d-btn').disabled=false;
+    }
+  },1000);
+}
+
+function onDepositSuccess(amount){
+  clearInterval(ussdTimer);
+  document.getElementById('d-ussd').classList.remove('show');
+  showSMsg('d','success',`ZK ${parseFloat(amount).toFixed(2)} added to your wallet! 🎉`);
+  document.getElementById('d-btn').disabled=false;
+  document.getElementById('d-amt').value='';
+  document.getElementById('d-fees').classList.remove('show');
+  sfxDeposit();
+  if(navigator.vibrate)navigator.vibrate([40,30,80]);
+  // Fetch fresh balance from server
+  fetch(`${SERVER}/api/balance?player_id=${PLAYER_ID}`).then(r=>r.json()).then(d=>setBalance(d.balance)).catch(()=>{});
+  loadTxHistory();
+}
+
+async function doWithdraw(){
+  const amt=parseFloat(document.getElementById('w-amt').value);
+  const phone=document.getElementById('w-phone').value.trim();
+  const btn=document.getElementById('w-btn');
+  btn.disabled=true;
+  showSMsg('w','pending','Initiating transfer...');
+  try{
+    const res=await fetch(`${SERVER}/api/withdraw`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({player_id:PLAYER_ID,amount:amt,phone:phone.replace(/\s/g,''),operator:wdNet,currency:'ZMW'})});
+    const data=await res.json();
+    if(data.status==='success'){
+      setBalance(data.newBalance);
+      showSMsg('w','success',`ZK ${amt.toFixed(2)} sent! Arrives within 5 minutes. ✅`);
+      document.getElementById('w-amt').value='';
+      document.getElementById('w-fees').classList.remove('show');
+      loadTxHistory();
+    }else{
+      showSMsg('w','error',data.message||data.error||'Withdrawal failed. Please try again.');
+      btn.disabled=false;
+    }
+  }catch(e){showSMsg('w','error','Could not reach server. Check connection.');btn.disabled=false;}
+}
+
+function showSMsg(panel,type,msg){
+  const el=document.getElementById(panel+'-status');
+  const icon=type==='pending'?'<div class="spinner"></div>':type==='success'?'✅':'❌';
+  el.className=`s-msg ${type} show`;
+  el.innerHTML=`${icon}<span>${msg}</span>`;
+  if(type!=='pending')setTimeout(()=>el.classList.remove('show'),6000);
+}
+
+async function loadTxHistory(){
+  const list=document.getElementById('tx-list');
+  try{
+    const res=await fetch(`${SERVER}/api/transactions?player_id=${PLAYER_ID}&limit=25`);
+    const data=await res.json();
+    const txs=data.transactions||[];
+    if(!txs.length){list.innerHTML='<div class="tx-empty"><div class="ei">📭</div><p>No transactions yet.<br>Make your first deposit to start playing.</p></div>';return;}
+    list.innerHTML='';
+    const icons={deposit:'💚',withdraw:'💸',win:'🏆',bet:'🎰',loss:'💨'};
+    txs.forEach(tx=>{
+      const isPos=['deposit','win'].includes(tx.type);
+      const amt=tx.type==='win'?tx.amount:tx.type==='deposit'?tx.amount:tx.amount;
+      const el=document.createElement('div');el.className='tx-item';
+      el.innerHTML=`<div class="tx-icon ${tx.type}">${icons[tx.type]||'💳'}</div>
+        <div class="tx-info"><div class="tx-lbl">${txLabel(tx)}</div><div class="tx-meta">${new Date(tx.createdAt).toLocaleString()}</div></div>
+        <div><div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':'-'}ZK ${parseFloat(amt).toFixed(2)}</div><div class="tx-st ${tx.status}">${tx.status}</div></div>`;
+      list.appendChild(el);
+    });
+  }catch(e){list.innerHTML='<div class="tx-empty"><div class="ei">⚠️</div><p>Could not load transactions.</p></div>';}
+}
+
+function txLabel(tx){
+  if(tx.type==='deposit')return `${tx.operator==='airtel'?'Airtel Money':'MTN MoMo'} Deposit`;
+  if(tx.type==='withdraw')return `${tx.operator==='airtel'?'Airtel Money':'MTN MoMo'} Withdrawal`;
+  if(tx.type==='win')return `Win — ${tx.atMultiplier}x Cashout`;
+  if(tx.type==='bet')return 'Flight Ticket';
+  if(tx.type==='loss')return 'Flight Lost';
+  return 'Transaction';
+}
+
+// ── Init ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
-  resize();
-  window.addEventListener('resize',resize);
-  setupVehicleSelector();
-  setupSave();
-  connect();
-  requestAnimationFrame(mainLoop);
+  resize();window.addEventListener('resize',resize);
+  setupVS();connect();
+  requestAnimationFrame(loop);
 });
-
-// Trail spawner via rAF hook
-setInterval(()=>{if(status==="IN_FLIGHT") spawnTrail();},35);
 </script>
-
-<style>
-@keyframes screenShake{0%,100%{transform:translate(0,0);}20%{transform:translate(-3px,2px);}40%{transform:translate(3px,-2px);}60%{transform:translate(-2px,3px);}80%{transform:translate(2px,-1px);}}
-</style>
-
 </body>
 </html>
