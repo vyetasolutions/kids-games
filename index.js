@@ -1,6 +1,7 @@
-  KWACHA BALLOON ADVENTURES — Game + Payment Server
+/**
+ * KWACHA BALLOON ADVENTURES — Game + Payment Server
  *  Vyeta Digital Solutions
- * ═══════════════════════════════════════════════════════════════════
+ * ═══════════════════════════════════════════
  *
  *  SETUP: npm install express socket.io cors axios uuid @supabase/supabase-js
  *
