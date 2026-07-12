@@ -48,10 +48,26 @@ const { createClient }    = require('@supabase/supabase-js');
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
+const io     = new Server(server, { cors: {
+        origin: [
+            'https://vyetasolutions.github.io',
+            'http://localhost:3000',
+            'http://127.0.0.1:5500'
+        ],
+        methods: ['GET', 'POST'],
+        credentials: true
+    } });
 const PORT   = process.env.PORT || 3000;
 
-app.use(cors({ origin: '*' }));
+app.use(cors({
+    origin: [
+        'https://vyetasolutions.github.io',
+        'http://localhost:3000',
+        'http://127.0.0.1:5500'
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true
+}));
 app.use(express.json());
 
 // ═══════════════════════════════════════════════════════════════════
