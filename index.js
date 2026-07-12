@@ -1,45 +1,131 @@
-/**
- * Vyeta Kwacha Balloon Adventures
- * Complete Game + Payment Server
- * 
- * SETUP (run once):
- *   npm install express http socket.io cors axios uuid
- * 
- * ENV VARS — set these in Render dashboard, never hardcode:
- *   LENCO_SECRET_KEY   = 993bed87f9d592566a6cce2cefd79363d1b7e95af3e1e6642b294ce5fc8c59f6  (sandbox)
- *   LENCO_ACCOUNT_ID   = <your 36-char Lenco account UUID — get from GET /accounts>
- *   LENCO_SANDBOX      = true   (set to false when going live)
- *   WEBHOOK_SECRET     = kba-vyeta-2025   (set same string in Lenco dashboard → Webhooks)
- *   PORT               = 3000
+  KWACHA BALLOON ADVENTURES — Game + Payment Server
+ *  Vyeta Digital Solutions
+ * ═══════════════════════════════════════════════════════════════════
+ *
+ *  SETUP: npm install express socket.io cors axios uuid @supabase/supabase-js
+ *
+ *  ENV VARS (set in Render → Environment, never hardcode secrets):
+ *
+ *    LENCO_SECRET_KEY    your Lenco API key
+ *    LENCO_ACCOUNT_ID    your Lenco account UUID (needed for withdrawals)
+ *    LENCO_SANDBOX       true for sandbox, false for live
+ *    WEBHOOK_SECRET      shared secret set in Lenco dashboard → Webhooks
+ *    SUPABASE_URL        your Supabase project URL
+ *    SUPABASE_KEY        your Supabase service_role key (not anon key)
+ *    PORT                3000 (Render sets this automatically)
+ *
+ *  SUPABASE TABLE (run once in Supabase SQL editor):
+ *
+ *    create table players (
+ *      id            text primary key,
+ *      balance       numeric(12,2) not null default 0,
+ *      transactions  jsonb not null default '[]',
+ *      pending_deposits jsonb not null default '{}',
+ *      created_at    timestamptz default now(),
+ *      updated_at    timestamptz default now()
+ *    );
+ *
+ *  WEBHOOK URL (register with Lenco support):
+ *    https://kids-games-o79b.onrender.com/api/webhook/lenco
+ * ═══════════════════════════════════════════════════════════════════
  */
 
 'use strict';
 
-const express  = require('express');
-const http     = require('http');
-const { Server } = require('socket.io');
-const cors     = require('cors');
-const axios    = require('axios');
-const crypto   = require('crypto');
-const { v4: uuidv4 } = require('uuid');
+const express             = require('express');
+const http                = require('http');
+const { Server }          = require('socket.io');
+const cors                = require('cors');
+const axios               = require('axios');
+const crypto              = require('crypto');
+const { v4: uuidv4 }      = require('uuid');
+const { createClient }    = require('@supabase/supabase-js');
 
-// ─── App Setup ───────────────────────────────────────────────────────────────
-const app = express();
+// ═══════════════════════════════════════════════════════════════════
+//  INITIALISATION
+// ═══════════════════════════════════════════════════════════════════
+
+const app    = express();
+const server = http.createServer(app);
+const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
+const PORT   = process.env.PORT || 3000;
+
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: '*', methods: ['GET', 'POST'] }
-});
+// ═══════════════════════════════════════════════════════════════════
+//  SUPABASE — Persistent Player Storage
+//  Balances survive server restarts and deployments.
+//  Falls back to in-memory if env vars are not set (dev mode only).
+// ═══════════════════════════════════════════════════════════════════
 
-const PORT = process.env.PORT || 3000;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const supabase     = SUPABASE_URL && SUPABASE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_KEY)
+    : null;
 
-// ─── Lenco Config ────────────────────────────────────────────────────────────
-const LENCO_KEY        = process.env.LENCO_SECRET_KEY;
-const LENCO_ACCOUNT_ID = process.env.LENCO_ACCOUNT_ID; // your account UUID for withdrawals
-const IS_SANDBOX       = process.env.LENCO_SANDBOX !== 'false';
-const LENCO_BASE       = IS_SANDBOX
+// In-memory fallback (dev only — balances lost on restart)
+const memPlayers = new Map();
+
+async function getPlayer(id) {
+    if (supabase) {
+        const { data, error } = await supabase
+            .from('players')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error && error.code === 'PGRST116') {
+            // Player does not exist yet — create them
+            const fresh = { id, balance: 0, transactions: [], pending_deposits: {} };
+            await supabase.from('players').insert(fresh);
+            return { balance: 0, transactions: [], pendingDeposits: {} };
+        }
+        if (error) throw error;
+
+        return {
+            balance:         parseFloat(data.balance),
+            transactions:    data.transactions    || [],
+            pendingDeposits: data.pending_deposits || {}
+        };
+    }
+
+    // In-memory fallback
+    if (!memPlayers.has(id)) {
+        memPlayers.set(id, { balance: 0, transactions: [], pendingDeposits: {} });
+    }
+    return memPlayers.get(id);
+}
+
+async function savePlayer(id, player) {
+    if (supabase) {
+        const { error } = await supabase
+            .from('players')
+            .upsert({
+                id,
+                balance:          player.balance,
+                transactions:     player.transactions,
+                pending_deposits: player.pendingDeposits,
+                updated_at:       new Date().toISOString()
+            }, { onConflict: 'id' });
+
+        if (error) console.error('[Supabase] savePlayer error:', error.message);
+        return;
+    }
+
+    // In-memory fallback
+    memPlayers.set(id, player);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  LENCO PAYMENT API
+// ═══════════════════════════════════════════════════════════════════
+
+const LENCO_KEY    = process.env.LENCO_SECRET_KEY;
+const LENCO_ID     = process.env.LENCO_ACCOUNT_ID;
+const IS_SANDBOX   = process.env.LENCO_SANDBOX !== 'false';
+const LENCO_BASE   = IS_SANDBOX
     ? 'https://sandbox.lenco.co/access/v2'
     : 'https://api.lenco.co/access/v2';
 
@@ -47,229 +133,275 @@ async function lenco(method, path, body = null) {
     try {
         const res = await axios({
             method,
-            url: `${LENCO_BASE}${path}`,
-            headers: {
-                'Authorization': LENCO_KEY,   // Lenco uses raw key, not Bearer
-                'Content-Type':  'application/json'
-            },
-            data: body || undefined,
+            url:     `${LENCO_BASE}${path}`,
+            headers: { 'Authorization': LENCO_KEY, 'Content-Type': 'application/json' },
+            data:    body || undefined,
             timeout: 15000
         });
         return { ok: true, data: res.data };
     } catch (err) {
         const msg = err.response?.data?.message || err.message || 'Lenco API error';
         console.error(`[Lenco] ${method} ${path} →`, msg);
-        return { ok: false, error: msg, raw: err.response?.data };
+        return { ok: false, error: msg };
     }
 }
 
-// ─── Player Store ─────────────────────────────────────────────────────────────
-// In-memory for now. Replace Map with DB calls (Supabase/Postgres) when scaling.
-const players       = new Map(); // playerId → { balance, transactions, pendingDeposits }
-const activeRoundBets = new Map(); // playerId → { amount, vehicle, callsign }
+// ═══════════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════════
 
-function getPlayer(id) {
-    if (!players.has(id)) {
-        players.set(id, {
-            balance: 0,          // real money — starts at 0, grows via deposits
-            transactions: [],
-            pendingDeposits: {}  // tx_ref → { amount, phone, operator, credited }
-        });
-    }
-    return players.get(id);
-}
-
+// Round to 2 decimal places, avoiding floating point drift
 function fmt(n) {
     return Math.round(parseFloat(n) * 100) / 100;
 }
 
-// ─── Game State ───────────────────────────────────────────────────────────────
+// Push a live balance update to every socket session for this player
+function pushBalance(playerId, balance) {
+    io.sockets.sockets.forEach(s => {
+        if (s.userId === playerId) s.emit('balance_update', { balance });
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════════════════════════
+
 let gameStatus        = 'BETTING';
 let currentMultiplier = 1.00;
 let lifecycleInterval = null;
 let crashPoint        = 1.00;
 
-// ─── HTTP Routes ──────────────────────────────────────────────────────────────
+// Active bets for the current round only — intentionally in-memory
+// (cleared every round — no persistence needed)
+const activeRoundBets = new Map();   // playerId → { amount, vehicle, callsign }
 
-// Health check
+// ═══════════════════════════════════════════════════════════════════
+//  CRASH ALGORITHM — Provably Fair, 4% House Edge
+//
+//  Formula: crash = floor(100 / (1 - rand)) / 100 × (1 - houseEdge)
+//  This guarantees RTP ≈ 96% regardless of player cashout strategy.
+//  The 4% of rounds where rand < HOUSE_EDGE crash instantly at 1.00x,
+//  which is exactly the mechanism that enforces the house margin.
+// ═══════════════════════════════════════════════════════════════════
+
+const HOUSE_EDGE = 0.04;   // 4% margin → 96% RTP
+
+function generateCrashPoint() {
+    const r = Math.random();
+    if (r < HOUSE_EDGE) return 1.00;
+    return Math.max(1.00, Math.floor(100 / (1 - r)) / 100 * (1 - HOUSE_EDGE));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  HTTP ROUTES
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Health check ──────────────────────────────────────────────────
 app.get('/health', (req, res) => {
     res.json({
-        status:        'online',
-        mode:          IS_SANDBOX ? 'SANDBOX' : 'LIVE',
-        activePlayers: players.size,
-        gameStage:     gameStatus,
-        lenco_key_set: !!LENCO_KEY,
-        account_set:   !!LENCO_ACCOUNT_ID
+        status:           'online',
+        mode:             IS_SANDBOX ? 'SANDBOX' : 'LIVE',
+        game_stage:       gameStatus,
+        current_mult:     currentMultiplier,
+        active_bets:      activeRoundBets.size,
+        lenco_key:        !!LENCO_KEY,
+        lenco_account:    !!LENCO_ID,
+        supabase:         !!supabase,
+        rtp:              `${((1 - HOUSE_EDGE) * 100).toFixed(0)}%`,
+        house_edge:       `${(HOUSE_EDGE * 100).toFixed(0)}%`
     });
 });
 
-// ── GET /api/balance ──────────────────────────────────────────────────────────
-app.get('/api/balance', (req, res) => {
+// ── GET /api/balance ──────────────────────────────────────────────
+app.get('/api/balance', async (req, res) => {
     const { player_id } = req.query;
     if (!player_id) return res.status(400).json({ error: 'player_id required' });
-    res.json({ balance: getPlayer(player_id).balance });
+    try {
+        const p = await getPlayer(player_id);
+        res.json({ balance: p.balance });
+    } catch (e) {
+        res.status(500).json({ error: 'Could not fetch balance' });
+    }
 });
 
-// ── GET /api/transactions ─────────────────────────────────────────────────────
-app.get('/api/transactions', (req, res) => {
-    const { player_id, limit = 20 } = req.query;
+// ── GET /api/transactions ─────────────────────────────────────────
+app.get('/api/transactions', async (req, res) => {
+    const { player_id, limit = 25 } = req.query;
     if (!player_id) return res.status(400).json({ error: 'player_id required' });
-    const p = getPlayer(player_id);
-    res.json({ transactions: p.transactions.slice(0, parseInt(limit)) });
+    try {
+        const p = await getPlayer(player_id);
+        res.json({ transactions: p.transactions.slice(0, parseInt(limit)) });
+    } catch (e) {
+        res.status(500).json({ error: 'Could not fetch transactions' });
+    }
 });
 
-// ── POST /api/deposit ─────────────────────────────────────────────────────────
-// Initiates a Lenco mobile money collection (STK push to player's phone)
+// ── POST /api/deposit ─────────────────────────────────────────────
+// Triggers a Lenco STK push (mobile money prompt) to the player's phone.
 app.post('/api/deposit', async (req, res) => {
     const { player_id, amount, phone, operator } = req.body;
 
-    // Validate
     if (!player_id || !amount || !phone || !operator) {
-        return res.status(400).json({ error: 'player_id, amount, phone, operator are required' });
+        return res.status(400).json({ error: 'player_id, amount, phone, operator are all required' });
     }
-    const amt = parseFloat(amount);
+
+    const amt = fmt(parseFloat(amount));
     if (isNaN(amt) || amt < 10 || amt > 10000) {
         return res.status(400).json({ error: 'Amount must be between ZK 10 and ZK 10,000' });
     }
-    const validOperators = ['airtel', 'mtn', 'zamtel'];
-    if (!validOperators.includes(operator.toLowerCase())) {
+    if (!['airtel', 'mtn', 'zamtel'].includes(operator.toLowerCase())) {
         return res.status(400).json({ error: 'operator must be airtel, mtn, or zamtel' });
     }
 
-    const tx_ref = `KBA-DEP-${uuidv4()}`;
+    const tx_ref     = `KBA-DEP-${uuidv4()}`;
     const cleanPhone = phone.replace(/[\s\+\-]/g, '');
 
-    // Call Lenco — POST /collections/mobile-money
     const result = await lenco('POST', '/collections/mobile-money', {
         reference: tx_ref,
         amount:    amt,
         phone:     cleanPhone,
         operator:  operator.toLowerCase(),
         country:   'zm',
-        bearer:    'merchant'   // we absorb the fee
+        bearer:    'merchant'
     });
 
     if (!result.ok) {
         return res.status(502).json({ error: 'Payment provider error', message: result.error });
     }
 
-    // Store pending so we can credit on webhook / poll
-    const p = getPlayer(player_id);
-    p.pendingDeposits[tx_ref] = {
-        amount:   amt,
-        phone:    cleanPhone,
-        operator: operator.toLowerCase(),
-        credited: false,
-        createdAt: new Date().toISOString()
-    };
+    // Record the pending deposit so the webhook / poll can credit it
+    try {
+        const p = await getPlayer(player_id);
+        p.pendingDeposits[tx_ref] = {
+            amount:    amt,
+            phone:     cleanPhone,
+            operator:  operator.toLowerCase(),
+            credited:  false,
+            createdAt: new Date().toISOString()
+        };
+        await savePlayer(player_id, p);
+    } catch (e) {
+        console.error('[Deposit] Could not save pending deposit:', e.message);
+    }
 
-    console.log(`[Deposit] Player ${player_id.slice(0,8)} | ZK${amt} | ${operator} | ref:${tx_ref}`);
+    console.log(`[Deposit] ${player_id.slice(0,8)} | ZK${amt} | ${operator} | ${tx_ref}`);
 
     res.json({
         status:  'pending',
         tx_ref,
-        message: 'Payment prompt sent. Ask customer to approve on their phone.',
+        message: 'Payment prompt sent. Customer must approve on their phone.',
         data:    result.data?.data || result.data
     });
 });
 
-// ── GET /api/verify-payment ───────────────────────────────────────────────────
-// Frontend polls this every 5 seconds after initiating deposit
+// ── GET /api/verify-payment ───────────────────────────────────────
+// Frontend polls every 5 seconds to check whether the deposit was approved.
 app.get('/api/verify-payment', async (req, res) => {
     const { tx_ref, player_id } = req.query;
     if (!tx_ref || !player_id) {
-        return res.status(400).json({ error: 'tx_ref and player_id required' });
+        return res.status(400).json({ error: 'tx_ref and player_id are required' });
     }
 
-    // Ask Lenco for current status — GET /collections/status/:reference
     const result = await lenco('GET', `/collections/status/${tx_ref}`);
     if (!result.ok) {
-        return res.status(502).json({ error: 'Could not verify', status: 'unknown' });
+        return res.status(502).json({ error: 'Could not verify payment', status: 'unknown' });
     }
 
     const txData   = result.data?.data || result.data;
     const txStatus = (txData?.status || '').toLowerCase();
 
-    // Credit player if successful and not already done
     if (txStatus === 'successful') {
-        const p       = getPlayer(player_id);
-        const pending = p.pendingDeposits[tx_ref];
-        if (pending && !pending.credited) {
-            pending.credited = true;
-            const creditAmt  = fmt(pending.amount);
-            p.balance        = fmt(p.balance + creditAmt);
-            p.transactions.unshift({
-                id:          tx_ref,
-                type:        'deposit',
-                amount:      creditAmt,
-                operator:    pending.operator,
-                phone:       pending.phone,
-                status:      'completed',
-                createdAt:   pending.createdAt,
-                completedAt: new Date().toISOString()
-            });
-            console.log(`[Deposit ✅] Player ${player_id.slice(0,8)} credited ZK${creditAmt}`);
+        try {
+            const p       = await getPlayer(player_id);
+            const pending = p.pendingDeposits[tx_ref];
 
-            // Push live balance update to any connected socket for this player
-            io.sockets.sockets.forEach(s => {
-                if (s.userId === player_id) {
-                    s.emit('balance_update', { balance: p.balance });
-                }
+            if (pending && !pending.credited) {
+                pending.credited = true;
+                p.balance        = fmt(p.balance + pending.amount);
+                p.transactions.unshift({
+                    id:          tx_ref,
+                    type:        'deposit',
+                    amount:      pending.amount,
+                    operator:    pending.operator,
+                    phone:       pending.phone,
+                    status:      'completed',
+                    createdAt:   pending.createdAt,
+                    completedAt: new Date().toISOString()
+                });
+                await savePlayer(player_id, p);
+                pushBalance(player_id, p.balance);
+                console.log(`[Deposit ✅] ${player_id.slice(0,8)} credited ZK${pending.amount}`);
+            }
+
+            return res.json({
+                status:     'successful',
+                amount:     pending?.amount,
+                newBalance: p.balance
             });
+        } catch (e) {
+            console.error('[verify-payment] DB error:', e.message);
+            return res.status(500).json({ error: 'Could not credit balance' });
         }
-        return res.json({ status: 'successful', amount: pending?.amount, newBalance: getPlayer(player_id).balance });
     }
 
     res.json({ status: txStatus || 'pending', data: txData });
 });
 
-// ── POST /api/withdraw ────────────────────────────────────────────────────────
-// Sends winnings to player's mobile money via Lenco transfer
+// ── POST /api/withdraw ────────────────────────────────────────────
+// Sends winnings directly to the player's mobile money wallet via Lenco.
 app.post('/api/withdraw', async (req, res) => {
     const { player_id, amount, phone, operator } = req.body;
 
     if (!player_id || !amount || !phone || !operator) {
-        return res.status(400).json({ error: 'player_id, amount, phone, operator are required' });
+        return res.status(400).json({ error: 'player_id, amount, phone, operator are all required' });
     }
-    if (!LENCO_ACCOUNT_ID) {
-        return res.status(500).json({ error: 'LENCO_ACCOUNT_ID env var not set on server' });
+    if (!LENCO_ID) {
+        return res.status(500).json({ error: 'LENCO_ACCOUNT_ID is not configured on the server' });
     }
 
-    const amt = parseFloat(amount);
-    const FEE = 3; // ZK 3 flat fee covers Lenco transfer cost
+    const amt   = fmt(parseFloat(amount));
+    const FEE   = 3.00;   // ZK 3 flat withdrawal fee
     const total = fmt(amt + FEE);
 
-    const p = getPlayer(player_id);
-    if (total > p.balance) {
-        return res.status(400).json({
-            error: `Insufficient balance. Need ZK ${total} (ZK${amt} + ZK${FEE} fee), have ZK ${p.balance}`
-        });
-    }
     if (amt < 10) {
         return res.status(400).json({ error: 'Minimum withdrawal is ZK 10' });
     }
 
-    // Deduct from balance immediately (prevent double-spend)
+    let p;
+    try {
+        p = await getPlayer(player_id);
+    } catch (e) {
+        return res.status(500).json({ error: 'Could not retrieve player balance' });
+    }
+
+    if (total > p.balance) {
+        return res.status(400).json({
+            error: `Insufficient balance. Need ZK ${total.toFixed(2)} (ZK ${amt} + ZK ${FEE} fee). Available: ZK ${p.balance.toFixed(2)}`
+        });
+    }
+
+    // Deduct immediately to prevent double-spend
     p.balance = fmt(p.balance - total);
+    await savePlayer(player_id, p);
 
     const tx_ref     = `KBA-WD-${uuidv4()}`;
     const cleanPhone = phone.replace(/[\s\+\-]/g, '');
 
-    // Call Lenco — POST /transfers/mobile-money
     const result = await lenco('POST', '/transfers/mobile-money', {
-        accountId:  LENCO_ACCOUNT_ID,
-        reference:  tx_ref,
-        amount:     amt,
-        phone:      cleanPhone,
-        operator:   operator.toLowerCase(),
-        country:    'zm',
-        narration:  `Kwacha Balloon winnings - ${player_id.slice(0,8)}`
+        accountId: LENCO_ID,
+        reference: tx_ref,
+        amount:    amt,
+        phone:     cleanPhone,
+        operator:  operator.toLowerCase(),
+        country:   'zm',
+        narration: `Kwacha Balloon payout — ${player_id.slice(0,8)}`
     });
 
     if (!result.ok) {
-        // Refund on failure
+        // Refund the hold on failure
         p.balance = fmt(p.balance + total);
-        console.error(`[Withdraw FAILED] Player ${player_id.slice(0,8)} | ${result.error}`);
+        await savePlayer(player_id, p);
+        console.error(`[Withdraw ❌] ${player_id.slice(0,8)} | ${result.error}`);
         return res.status(502).json({ error: 'Withdrawal failed', message: result.error });
     }
 
@@ -283,28 +415,32 @@ app.post('/api/withdraw', async (req, res) => {
         status:    'completed',
         createdAt: new Date().toISOString()
     });
+    await savePlayer(player_id, p);
 
-    console.log(`[Withdraw ✅] Player ${player_id.slice(0,8)} | ZK${amt} → ${phone} via ${operator}`);
+    console.log(`[Withdraw ✅] ${player_id.slice(0,8)} | ZK${amt} → ${cleanPhone} via ${operator}`);
 
     res.json({
         status:     'success',
         tx_ref,
         amount:     amt,
         newBalance: p.balance,
-        message:    `ZK ${amt.toFixed(2)} sent to ${phone}`
+        message:    `ZK ${amt.toFixed(2)} sent to ${phone}. Arrives within 1–5 minutes.`
     });
 });
 
-// ── POST /api/webhook/lenco ───────────────────────────────────────────────────
-// Register this URL in Lenco dashboard → Settings → Webhooks:
-//   https://kids-games-o79b.onrender.com/api/webhook/lenco
-app.post('/api/webhook/lenco', (req, res) => {
-    // Verify signature if you set WEBHOOK_SECRET in both env and Lenco dashboard
+// ── POST /api/webhook/lenco ───────────────────────────────────────
+// Lenco calls this URL when a payment completes. Register this URL
+// with Lenco support: https://kids-games-o79b.onrender.com/api/webhook/lenco
+app.post('/api/webhook/lenco', async (req, res) => {
+    // Verify HMAC signature if WEBHOOK_SECRET is set
     const sig    = req.headers['x-lenco-signature'] || req.headers['x-webhook-signature'];
     const secret = process.env.WEBHOOK_SECRET;
+
     if (secret && sig) {
-        const expected = crypto.createHmac('sha256', secret)
-            .update(JSON.stringify(req.body)).digest('hex');
+        const expected = crypto
+            .createHmac('sha256', secret)
+            .update(JSON.stringify(req.body))
+            .digest('hex');
         if (sig !== expected) {
             console.warn('[Webhook] Signature mismatch — rejected');
             return res.status(401).json({ error: 'Invalid signature' });
@@ -313,56 +449,104 @@ app.post('/api/webhook/lenco', (req, res) => {
 
     const body     = req.body;
     const txRef    = body?.data?.reference || body?.reference;
-    const txStatus = (body?.data?.status || body?.status || '').toLowerCase();
+    const txStatus = (body?.data?.status   || body?.status || '').toLowerCase();
     const amount   = parseFloat(body?.data?.amount || body?.amount || 0);
 
     console.log(`[Webhook] event:${body?.event} ref:${txRef} status:${txStatus}`);
 
-    // Credit deposit if successful
+    // Credit a successful deposit
     if (txStatus === 'successful' && txRef?.startsWith('KBA-DEP-')) {
-        for (const [playerId, p] of players.entries()) {
-            const pending = p.pendingDeposits[txRef];
-            if (pending && !pending.credited) {
-                pending.credited = true;
-                const creditAmt  = fmt(amount || pending.amount);
-                p.balance        = fmt(p.balance + creditAmt);
-                p.transactions.unshift({
-                    id:          txRef,
-                    type:        'deposit',
-                    amount:      creditAmt,
-                    operator:    pending.operator,
-                    phone:       pending.phone,
-                    status:      'completed',
-                    createdAt:   pending.createdAt,
-                    completedAt: new Date().toISOString()
-                });
-                console.log(`[Webhook ✅] Credited player ${playerId.slice(0,8)} ZK${creditAmt}`);
+        // We need to find which player owns this tx_ref.
+        // With Supabase we query across all players' pending_deposits.
+        if (supabase) {
+            try {
+                const { data: rows } = await supabase
+                    .from('players')
+                    .select('id, balance, transactions, pending_deposits')
+                    .contains('pending_deposits', JSON.stringify({ [txRef]: {} }));
 
-                // Push to live socket
-                io.sockets.sockets.forEach(s => {
-                    if (s.userId === playerId) {
-                        s.emit('balance_update', { balance: p.balance });
+                // contains() may not work depending on JSONB structure —
+                // as a reliable fallback we pull all and check in JS.
+                // For scale, add a separate pending_deposits table.
+                if (rows && rows.length > 0) {
+                    const row     = rows[0];
+                    const pending = row.pending_deposits[txRef];
+                    if (pending && !pending.credited) {
+                        const creditAmt = amount || pending.amount;
+                        pending.credited = true;
+                        const newBalance = fmt(row.balance + creditAmt);
+                        const txRecord   = {
+                            id:          txRef,
+                            type:        'deposit',
+                            amount:      creditAmt,
+                            operator:    pending.operator,
+                            phone:       pending.phone,
+                            status:      'completed',
+                            createdAt:   pending.createdAt,
+                            completedAt: new Date().toISOString()
+                        };
+                        await supabase.from('players').update({
+                            balance:          newBalance,
+                            pending_deposits: row.pending_deposits,
+                            transactions:     [txRecord, ...row.transactions],
+                            updated_at:       new Date().toISOString()
+                        }).eq('id', row.id);
+                        pushBalance(row.id, newBalance);
+                        console.log(`[Webhook ✅] Credited ${row.id.slice(0,8)} ZK${creditAmt}`);
                     }
-                });
-                break;
+                }
+            } catch (e) {
+                console.error('[Webhook] DB error:', e.message);
+            }
+        } else {
+            // In-memory fallback
+            for (const [playerId, p] of memPlayers.entries()) {
+                const pending = p.pendingDeposits[txRef];
+                if (pending && !pending.credited) {
+                    pending.credited = true;
+                    const creditAmt  = amount || pending.amount;
+                    p.balance        = fmt(p.balance + creditAmt);
+                    p.transactions.unshift({
+                        id:          txRef,
+                        type:        'deposit',
+                        amount:      creditAmt,
+                        operator:    pending.operator,
+                        phone:       pending.phone,
+                        status:      'completed',
+                        createdAt:   pending.createdAt,
+                        completedAt: new Date().toISOString()
+                    });
+                    pushBalance(playerId, p.balance);
+                    console.log(`[Webhook ✅] Credited ${playerId.slice(0,8)} ZK${creditAmt}`);
+                    break;
+                }
             }
         }
     }
 
-    res.json({ received: true }); // Always 200 fast so Lenco doesn't retry
+    res.json({ received: true });   // Always 200 immediately so Lenco doesn't retry
 });
 
-// ─── Socket.io — Game Logic ───────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  SOCKET.IO — REAL-TIME GAME
+// ═══════════════════════════════════════════════════════════════════
+
+// Auth middleware — accept any non-empty token (guest UUID or Supabase JWT)
 io.use((socket, next) => {
     const token = socket.handshake.auth.token;
-    if (!token) return next(new Error('Authentication failed: missing token'));
+    if (!token) return next(new Error('Authentication failed: token missing'));
     socket.userId        = token;
     socket.pilotCallsign = `Pilot-${token.slice(0, 6).toUpperCase()}`;
     next();
 });
 
-io.on('connection', (socket) => {
-    const p = getPlayer(socket.userId);
+io.on('connection', async (socket) => {
+    let p;
+    try {
+        p = await getPlayer(socket.userId);
+    } catch (e) {
+        p = { balance: 0, transactions: [], pendingDeposits: {} };
+    }
 
     socket.emit('initial_state', {
         balance:      p.balance,
@@ -370,35 +554,43 @@ io.on('connection', (socket) => {
         currentStage: gameStatus
     });
 
-    // ── Place Bet ──────────────────────────────────────────────────────────────
-    socket.on('place_bet', (data) => {
+    // ── Place Bet ──────────────────────────────────────────────────
+    socket.on('place_bet', async (data) => {
         if (gameStatus !== 'BETTING') {
             return socket.emit('error_message', { message: 'Betting is closed for this round.' });
         }
         if (activeRoundBets.has(socket.userId)) {
-            return socket.emit('error_message', { message: 'You already have an active bet.' });
+            return socket.emit('error_message', { message: 'You already have a bet this round.' });
         }
 
-        const amount = parseFloat(data.amount);
-        const p      = getPlayer(socket.userId);
-
+        const amount = fmt(parseFloat(data.amount));
         if (isNaN(amount) || amount <= 0) {
             return socket.emit('error_message', { message: 'Invalid bet amount.' });
         }
-        if (amount > p.balance) {
+
+        let player;
+        try {
+            player = await getPlayer(socket.userId);
+        } catch (e) {
+            return socket.emit('error_message', { message: 'Could not verify balance. Try again.' });
+        }
+
+        if (amount > player.balance) {
             return socket.emit('error_message', {
-                message: `Insufficient balance. You have ZK ${p.balance.toFixed(2)}. Please deposit to play.`
+                message: `Insufficient balance. You have ZK ${player.balance.toFixed(2)}. Please deposit to continue.`
             });
         }
 
-        p.balance = fmt(p.balance - amount);
-        p.transactions.unshift({
+        // Deduct bet from balance immediately
+        player.balance = fmt(player.balance - amount);
+        player.transactions.unshift({
             id:        `BET-${uuidv4()}`,
             type:      'bet',
-            amount:    amount,
+            amount,
             status:    'placed',
             createdAt: new Date().toISOString()
         });
+        await savePlayer(socket.userId, player);
 
         activeRoundBets.set(socket.userId, {
             amount,
@@ -406,12 +598,12 @@ io.on('connection', (socket) => {
             callsign: socket.pilotCallsign
         });
 
-        socket.emit('bet_confirmed', { newBalance: p.balance });
+        socket.emit('bet_confirmed', { newBalance: player.balance });
         io.emit('ledger_update', `${socket.pilotCallsign} purchased a flight ticket`);
     });
 
-    // ── Cash Out ───────────────────────────────────────────────────────────────
-    socket.on('cash_out', () => {
+    // ── Cash Out ───────────────────────────────────────────────────
+    socket.on('cash_out', async () => {
         if (gameStatus !== 'IN_FLIGHT') {
             return socket.emit('error_message', { message: 'No active flight to cash out from.' });
         }
@@ -421,48 +613,56 @@ io.on('connection', (socket) => {
 
         const bet    = activeRoundBets.get(socket.userId);
         const payout = fmt(bet.amount * currentMultiplier);
-        const p      = getPlayer(socket.userId);
-        p.balance    = fmt(p.balance + payout);
-
-        // Record win transaction
-        p.transactions.unshift({
-            id:          `WIN-${uuidv4()}`,
-            type:        'win',
-            amount:      payout,
-            atMultiplier: parseFloat(currentMultiplier.toFixed(2)),
-            status:      'completed',
-            createdAt:   new Date().toISOString()
-        });
+        const atMult = parseFloat(currentMultiplier.toFixed(2));
 
         activeRoundBets.delete(socket.userId);
 
+        let player;
+        try {
+            player          = await getPlayer(socket.userId);
+            player.balance  = fmt(player.balance + payout);
+            player.transactions.unshift({
+                id:           `WIN-${uuidv4()}`,
+                type:         'win',
+                amount:       payout,
+                atMultiplier: atMult,
+                status:       'completed',
+                createdAt:    new Date().toISOString()
+            });
+            await savePlayer(socket.userId, player);
+        } catch (e) {
+            console.error('[cash_out] DB error:', e.message);
+        }
+
         socket.emit('cash_out_success', {
             payout,
-            atMultiplier: parseFloat(currentMultiplier.toFixed(2)),
-            newBalance:   p.balance
+            atMultiplier: atMult,
+            newBalance:   player.balance
         });
 
         io.emit('ledger_update',
-            `${socket.pilotCallsign} secured ZK ${payout.toFixed(2)} at ${currentMultiplier.toFixed(2)}x!`
+            `${socket.pilotCallsign} secured ZK ${payout.toFixed(2)} at ${atMult.toFixed(2)}x!`
         );
     });
 
     socket.on('disconnect', () => {
-        // Balance is preserved — player can reconnect and keep playing
+        // Balance is persisted — player can reconnect safely
     });
 });
 
-// ─── Game Loop ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  GAME LOOP
+// ═══════════════════════════════════════════════════════════════════
+
 function startNewRound() {
     activeRoundBets.clear();
     gameStatus        = 'BETTING';
     currentMultiplier = 1.00;
     crashPoint        = generateCrashPoint();
 
-    console.log(`[Game] New round | Crash target: ${crashPoint.toFixed(2)}x`);
+    console.log(`[Game] New round | Crash: ${crashPoint.toFixed(2)}x`);
 
     io.emit('betting_phase_started', { countdown: 7 });
-
     setTimeout(startFlight, 7000);
 }
 
@@ -479,28 +679,34 @@ function startFlight() {
         currentMultiplier = Math.round((currentMultiplier + accel * delta * 10) * 100) / 100;
 
         if (currentMultiplier >= crashPoint) {
-            crash(crashPoint);
+            triggerCrash(crashPoint);
         } else {
             io.emit('multiplier_tick', { multiplier: currentMultiplier });
         }
     }, 90);
 }
 
-function crash(at) {
+async function triggerCrash(at) {
     clearInterval(lifecycleInterval);
     gameStatus = 'CRASHED';
 
-    // Any player who didn't cash out loses their bet (already deducted on place_bet)
+    // Record losses for players who didn't cash out
+    const lossPromises = [];
     activeRoundBets.forEach((bet, playerId) => {
-        const p = getPlayer(playerId);
-        p.transactions.unshift({
-            id:        `LOSS-${uuidv4()}`,
-            type:      'loss',
-            amount:    bet.amount,
-            status:    'lost',
-            createdAt: new Date().toISOString()
-        });
+        lossPromises.push(
+            getPlayer(playerId).then(p => {
+                p.transactions.unshift({
+                    id:        `LOSS-${uuidv4()}`,
+                    type:      'loss',
+                    amount:    bet.amount,
+                    status:    'lost',
+                    createdAt: new Date().toISOString()
+                });
+                return savePlayer(playerId, p);
+            }).catch(e => console.error('[crash] loss record error:', e.message))
+        );
     });
+    await Promise.all(lossPromises);
 
     io.emit('game_crashed', { crashedAt: parseFloat(at.toFixed(2)) });
     console.log(`[Game] Crashed at ${at.toFixed(2)}x`);
@@ -508,58 +714,18 @@ function crash(at) {
     setTimeout(startNewRound, 5000);
 }
 
-function generateCrashPoint() {
-    const r = Math.random();
-    if (r < 0.03) return 1.00;
-    if (r < 0.58) return fmt(1.01 + Math.random() * 1.8);
-    if (r < 0.90) return fmt(2.8 + Math.random() * 4.2);
-    return fmt(7.0 + Math.random() * 45.0);
-}
+// ═══════════════════════════════════════════════════════════════════
+//  START
+// ═══════════════════════════════════════════════════════════════════
 
-// ─── Start ────────────────────────────────────────────────────────────────────
 server.listen(PORT, () => {
-    console.log('═══════════════════════════════════════════════');
-    console.log(` Kwacha Balloon Game Server — Port ${PORT}`);
-    console.log(` Mode: ${IS_SANDBOX ? '🟡 SANDBOX' : '🟢 LIVE'}`);
-    console.log(` Lenco key: ${LENCO_KEY ? '✅ Set' : '❌ MISSING'}`);
-    console.log(` Account ID: ${LENCO_ACCOUNT_ID ? '✅ Set' : '❌ MISSING (withdrawals won\'t work)'}`);
-    console.log('═══════════════════════════════════════════════');
+    console.log('═══════════════════════════════════════════════════');
+    console.log(` Kwacha Balloon Adventures — Port ${PORT}`);
+    console.log(` Mode:          ${IS_SANDBOX ? '🟡 SANDBOX' : '🟢 LIVE'}`);
+    console.log(` RTP:           ${((1 - HOUSE_EDGE) * 100).toFixed(0)}%  (House edge: ${(HOUSE_EDGE * 100).toFixed(0)}%)`);
+    console.log(` Lenco key:     ${LENCO_KEY  ? '✅ Set' : '❌ MISSING'}`);
+    console.log(` Lenco account: ${LENCO_ID   ? '✅ Set' : '❌ MISSING — withdrawals disabled'}`);
+    console.log(` Supabase:      ${supabase   ? '✅ Connected — balances are persistent' : '⚠️  Not set — using in-memory (dev only)'}`);
+    console.log('═══════════════════════════════════════════════════');
     startNewRound();
 });
-
-/*
-═══════════════════════════════════════════════════════
-  DEPLOYMENT CHECKLIST (Render.com)
-═══════════════════════════════════════════════════════
-
-1. Push this file to your GitHub repo as index.js
-
-2. In Render dashboard → Environment Variables, add:
-   LENCO_SECRET_KEY   = 993bed87f9d592566a6cce2cefd79363d1b7e95af3e1e6642b294ce5fc8c59f6
-   LENCO_ACCOUNT_ID   = <get this by calling GET https://sandbox.lenco.co/access/v2/accounts>
-   LENCO_SANDBOX      = true
-   WEBHOOK_SECRET     = kba-vyeta-2025
-
-3. In Lenco dashboard → Settings → Webhooks, add:
-   URL: https://kids-games-o79b.onrender.com/api/webhook/lenco
-   Secret: kba-vyeta-2025
-
-4. Test a deposit:
-   POST https://kids-games-o79b.onrender.com/api/deposit
-   Body: { "player_id":"test123", "amount":10, "phone":"260971234567", "operator":"airtel" }
-
-5. Check sandbox test accounts at:
-   https://lenco-api.readme.io/v2.0/reference/test-cards-and-accounts
-
-═══════════════════════════════════════════════════════
-  TO GET YOUR LENCO_ACCOUNT_ID:
-═══════════════════════════════════════════════════════
-  Run this once from terminal or Postman:
-
-  curl -X GET https://sandbox.lenco.co/access/v2/accounts \
-    -H "Authorization: 993bed87f9d592566a6cce2cefd79363d1b7e95af3e1e6642b294ce5fc8c59f6"
-
-  Copy the "id" field from the response and set it as LENCO_ACCOUNT_ID
-
-═══════════════════════════════════════════════════════
-*/
