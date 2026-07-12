@@ -134,7 +134,7 @@ async function lenco(method, path, body = null) {
         const res = await axios({
             method,
             url:     `${LENCO_BASE}${path}`,
-            headers: { 'Authorization': LENCO_KEY, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${LENCO_KEY}`, 'Content-Type': 'application/json' },
             data:    body || undefined,
             timeout: 15000
         });
