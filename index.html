@@ -274,6 +274,29 @@ canvas{width:100%;height:100%;display:block;}
 @keyframes isCloudDrift{from{transform:translateX(0);}to{transform:translateX(160vw);}}
 @keyframes isReveal{to{opacity:1;transform:translateY(0);}}
 @keyframes isDotPulse{0%,80%,100%{opacity:0.3;transform:scale(0.7);}40%{opacity:1;transform:scale(1);}}
+
+/* ── MODE SELECT + MANUAL PAYMENTS ── */
+.mode-overlay{position:fixed;inset:0;z-index:9000;background:radial-gradient(ellipse 80% 60% at 50% 18%,#1e1b4b 0%,#0b1020 55%,#03040a 100%);display:none;align-items:center;justify-content:center;padding:20px;}
+.mode-overlay.show{display:flex;}
+.mode-card{width:100%;max-width:400px;text-align:center;}
+.mode-title{font-family:'Sora',sans-serif;font-size:1.5rem;font-weight:800;margin-bottom:6px;}
+.mode-sub{font-size:0.85rem;color:var(--muted);margin-bottom:22px;}
+.mode-btn{display:block;width:100%;border:none;border-radius:16px;padding:18px 16px;margin-bottom:12px;color:#fff;font-weight:800;font-size:1.05rem;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;}
+.mode-btn span{display:block;font-size:0.74rem;font-weight:600;opacity:0.85;margin-top:4px;}
+.mode-btn:hover{transform:translateY(-2px);}
+.mode-demo{background:linear-gradient(135deg,#2563eb,#7c3aed);box-shadow:0 6px 22px rgba(79,70,229,0.45);}
+.mode-real{background:linear-gradient(135deg,#10b981,#047857);box-shadow:0 6px 22px rgba(16,185,129,0.4);}
+.mode-note{font-size:0.7rem;color:var(--muted);margin-top:10px;line-height:1.5;}
+.pay-box{background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.28);border-radius:13px;padding:12px 13px;margin-bottom:12px;}
+.pay-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.pay-row:last-child{margin-bottom:0;}
+.pay-lbl{font-size:0.66rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:700;width:62px;flex-shrink:0;}
+.pay-val{font-size:0.95rem;font-weight:800;flex:1;user-select:text;}
+.pay-val.big{font-family:'Sora',sans-serif;font-size:1.2rem;color:var(--gold);letter-spacing:0.5px;}
+.copy-btn{border:1px solid rgba(251,191,36,0.4);background:rgba(251,191,36,0.12);color:var(--gold);border-radius:8px;padding:5px 11px;font-size:0.72rem;font-weight:800;cursor:pointer;}
+.step-note{font-size:0.72rem;color:var(--muted);line-height:1.5;margin:0 0 12px;}
+.tx-st.rejected,.tx-st.cancelled{color:var(--red);}
+.tx-st.placed{color:var(--muted);}
 </style>
 </head>
 <body>
@@ -332,7 +355,7 @@ canvas{width:100%;height:100%;display:block;}
 </div>
 <script>
 (function(){
-  var el=document.getElementById('IS');if(!el)return;
+  var el=document.getElementById('IS');if(!el)return;if(sessionStorage.getItem('kba_skip_intro')){sessionStorage.removeItem('kba_skip_intro');el.remove();return;}
   var fill=document.getElementById('IPF'),pct=document.getElementById('IPP'),tip=document.getElementById('ITIP');
   var MS=6500,tips=["Tip: Cash out before the balloon drifts away.","Tip: Bigger multiplier = bigger risk.","Tip: Set your target before take-off.","Calibrating flight instruments...","Syncing live flight data...","Tip: A sure win beats a missed one."];
   var ti=0,t0=Date.now();
@@ -408,6 +431,17 @@ canvas{width:100%;height:100%;display:block;}
 
 <div id="ct"><h2 style="font-size:1.6rem;font-weight:800;margin-bottom:3px;">FLIGHT SECURED!</h2><p id="CPD" style="font-size:0.95rem;font-weight:600;opacity:0.95;">You earned ZK 0.00</p></div>
 
+<!-- ══ MODE SELECT ══ -->
+<div class="mode-overlay" id="MO">
+  <div class="mode-card">
+    <div class="mode-title">How do you want to play?</div>
+    <div class="mode-sub">You can switch at any time.</div>
+    <button class="mode-btn mode-demo" onclick="chooseMode('demo')">🎮 Play Free (Demo)<span>ZK 5,000 play money · no deposits · no withdrawals</span></button>
+    <button class="mode-btn mode-real" onclick="chooseMode('real')">💰 Real Money<span>Deposit with MTN / Airtel Mobile Money</span></button>
+    <p class="mode-note">Real-money play is for adults (18+) only.<br>Only play with money you can afford to lose.</p>
+  </div>
+</div>
+
 <!-- ══ WALLET MODAL ══ -->
 <div class="w-overlay" id="WO" onclick="handleWOverlay(event)">
   <div class="w-modal">
@@ -421,7 +455,7 @@ canvas{width:100%;height:100%;display:block;}
     <div class="w-balance">
       <div class="w-bal-eye">Available Balance</div>
       <div class="w-bal-amt"><span>ZK </span><span id="WB">0.00</span></div>
-      <div class="w-bal-sub"><span class="live-dot"></span><span id="w-mode-lbl">Sandbox mode</span></div>
+      <div class="w-bal-sub"><span class="live-dot"></span><span id="w-mode-lbl">Real money</span> · <a href="#" onclick="chooseMode('demo');return false;" style="color:var(--cyan);text-decoration:none">Switch to demo</a></div>
     </div>
 
     <!-- Quick actions -->
@@ -446,65 +480,49 @@ canvas{width:100%;height:100%;display:block;}
       <!-- DEPOSIT PANEL -->
       <div class="w-panel active" id="wpanel-deposit">
         <div style="height:10px;"></div>
-        <label class="f-label">Select Network</label>
-        <div class="net-grid">
-          <div class="net-opt sel" id="dnet-airtel" onclick="selDepNet('airtel')">
-            <div class="net-icon ni-air">A</div>
-            <div><div class="net-name">Airtel Money</div><div class="net-sub">Zambia · ZMW</div></div>
-          </div>
-          <div class="net-opt" id="dnet-mtn" onclick="selDepNet('mtn')">
-            <div class="net-icon ni-mtn">M</div>
-            <div><div class="net-name">MTN MoMo</div><div class="net-sub">Zambia · ZMW</div></div>
-          </div>
+        <label class="f-label">1 · Pick a network and send your money</label>
+        <div class="net-grid" id="dnet-grid"><div class="step-note">Loading payment details…</div></div>
+
+        <div class="pay-box">
+          <div class="pay-row"><span class="pay-lbl">Send to</span><span class="pay-val big" id="pay-num">—</span><button class="copy-btn" onclick="copyText('pay-num',this)">Copy</button></div>
+          <div class="pay-row"><span class="pay-lbl">Name</span><span class="pay-val" id="pay-name">—</span></div>
+          <div class="pay-row"><span class="pay-lbl">Network</span><span class="pay-val" id="pay-net">—</span></div>
         </div>
+        <p class="step-note">Send the money from your own phone using Mobile Money. Then fill in the boxes below so we can find and credit your payment.</p>
 
-        <label class="f-label">Mobile Number</label>
-        <input type="tel" class="f-input" id="d-phone" placeholder="e.g. 260971234567" oninput="onDepInput()">
-
-        <label class="f-label">Amount (ZMW)</label>
+        <label class="f-label">2 · Amount you sent (ZMW)</label>
         <div class="f-amt-wrap">
           <span class="f-amt-pre">ZK</span>
-          <input type="number" class="f-input has-pre" id="d-amt" placeholder="0.00" min="10" max="10000" oninput="onDepInput()">
+          <input type="number" class="f-input has-pre" id="d-amt" placeholder="Minimum 20" min="20" max="10000" oninput="onDepInput()">
         </div>
-        <div class="f-warn" id="d-warn"></div>
-
         <div class="chips" style="margin-top:8px;">
           <div class="chip" onclick="setAmt('d',20)">ZK 20</div>
           <div class="chip" onclick="setAmt('d',50)">ZK 50</div>
           <div class="chip" onclick="setAmt('d',100)">ZK 100</div>
           <div class="chip" onclick="setAmt('d',200)">ZK 200</div>
           <div class="chip" onclick="setAmt('d',500)">ZK 500</div>
-          <div class="chip" onclick="setAmt('d',1000)">ZK 1,000</div>
         </div>
 
-        <div class="fee-box" id="d-fees">
-          <div class="fee-row"><span class="fee-lbl">You send</span><span class="fee-val" id="df-send">ZK 0.00</span></div>
-          <div class="fee-row"><span class="fee-lbl">Processing fee (~1.4%)</span><span class="fee-val" id="df-fee">ZK 0.00</span></div>
-          <div class="fee-row"><span class="fee-lbl">You receive in wallet</span><span class="fee-val tot" id="df-net">ZK 0.00</span></div>
-        </div>
+        <label class="f-label">3 · The number you sent FROM</label>
+        <input type="tel" class="f-input" id="d-phone" placeholder="e.g. 0971234567" oninput="onDepInput()">
 
-        <div class="ussd-box" id="d-ussd">
-          <div class="ussd-title">📱 Check Your Phone</div>
-          <div class="ussd-msg">A prompt was sent to <strong id="ussd-ph">your phone</strong>.<br>Approve it with your <strong id="ussd-net">Airtel Money</strong> PIN.</div>
-          <div class="ussd-timer">
-            <span id="ussd-cd">120s</span>
-            <div class="timer-bar"><div class="timer-fill" id="ussd-fill" style="width:100%"></div></div>
-            <span>remaining</span>
-          </div>
-        </div>
+        <label class="f-label">4 · Transaction ID (from your confirmation SMS)</label>
+        <input type="text" class="f-input" id="d-txref" placeholder="e.g. MP260101.1234.A56789" maxlength="40" oninput="onDepInput()">
+        <div class="f-warn" id="d-warn"></div>
 
         <div class="s-msg" id="d-status"><div class="spinner"></div><span id="d-status-txt">Processing...</span></div>
 
         <button class="w-btn w-btn-dep" id="d-btn" onclick="doDeposit()" disabled>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-          Deposit via Mobile Money
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+          I have sent the money
         </button>
+        <p class="step-note" style="margin-top:10px;">Your wallet is credited once we confirm the payment, usually within 30 minutes. Wrong or fake transaction IDs are rejected.</p>
       </div>
 
       <!-- WITHDRAW PANEL -->
       <div class="w-panel" id="wpanel-withdraw">
         <div style="height:10px;"></div>
-        <label class="f-label">Send to Network</label>
+        <label class="f-label">Send my money to</label>
         <div class="net-grid">
           <div class="net-opt sel" id="wnet-airtel" onclick="selWdNet('airtel')">
             <div class="net-icon ni-air">A</div>
@@ -517,12 +535,12 @@ canvas{width:100%;height:100%;display:block;}
         </div>
 
         <label class="f-label">Mobile Number</label>
-        <input type="tel" class="f-input" id="w-phone" placeholder="e.g. 260971234567" oninput="onWdInput()">
+        <input type="tel" class="f-input" id="w-phone" placeholder="e.g. 0971234567" oninput="onWdInput()">
 
-        <label class="f-label">Amount (ZMW)</label>
+        <label class="f-label">Amount to receive (ZMW)</label>
         <div class="f-amt-wrap">
           <span class="f-amt-pre">ZK</span>
-          <input type="number" class="f-input has-pre" id="w-amt" placeholder="0.00" min="10" oninput="onWdInput()">
+          <input type="number" class="f-input has-pre" id="w-amt" placeholder="Minimum 20" min="20" oninput="onWdInput()">
         </div>
         <div class="f-warn" id="w-warn"></div>
 
@@ -535,17 +553,18 @@ canvas{width:100%;height:100%;display:block;}
         </div>
 
         <div class="fee-box" id="w-fees">
-          <div class="fee-row"><span class="fee-lbl">Withdraw amount</span><span class="fee-val" id="wf-amt">ZK 0.00</span></div>
-          <div class="fee-row"><span class="fee-lbl">Processing fee</span><span class="fee-val" id="wf-fee">ZK 3.00</span></div>
-          <div class="fee-row"><span class="fee-lbl">You receive</span><span class="fee-val tot" id="wf-net">ZK 0.00</span></div>
+          <div class="fee-row"><span class="fee-lbl">You receive</span><span class="fee-val" id="wf-amt">ZK 0.00</span></div>
+          <div class="fee-row"><span class="fee-lbl">Withdrawal fee</span><span class="fee-val" id="wf-fee">ZK 3.00</span></div>
+          <div class="fee-row"><span class="fee-lbl">Taken from wallet</span><span class="fee-val tot" id="wf-net">ZK 0.00</span></div>
         </div>
 
         <div class="s-msg" id="w-status"><div class="spinner"></div><span id="w-status-txt">Processing...</span></div>
 
         <button class="w-btn w-btn-wd" id="w-btn" onclick="doWithdraw()" disabled>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-          Withdraw to Mobile Money
+          Request Withdrawal
         </button>
+        <p class="step-note" style="margin-top:10px;">Withdrawals are sent by hand, usually within an hour (up to a few hours). The amount plus fee is held from your wallet immediately and refunded in full if we cannot send it.</p>
       </div>
 
       <!-- HISTORY PANEL -->
@@ -560,7 +579,7 @@ canvas{width:100%;height:100%;display:block;}
 
     <div class="rg-foot">
       <span>🛡️</span>
-      <p>Play responsibly. Min deposit ZK 10 · Max ZK 10,000/day · 18+ only · Licensed under Vyeta LLC · Gambling helpline: <strong>116</strong></p>
+      <p>Play responsibly. 18+ only. Min deposit ZK 20 · Min withdrawal ZK 20 (ZK 3 fee) · Deposits and withdrawals are processed manually and usually take under an hour. Only bet what you can afford to lose.</p>
     </div>
   </div>
 </div>
@@ -579,7 +598,12 @@ function getGuestId(){
   if(!id){id=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():'guest-'+Date.now();localStorage.setItem('kba_guest_id',id);}
   return id;
 }
-const PLAYER_ID=getGuestId();
+const BASE_ID=getGuestId();
+// Mode: 'demo' (free play money) or 'real'. Demo uses a SEPARATE account id so
+// play money can never mix with real balances.
+const MODE=localStorage.getItem('kba_mode');
+const IS_DEMO=MODE==='demo';
+const PLAYER_ID=IS_DEMO?'demo_'+BASE_ID:BASE_ID;
 
 // ── Game State ────────────────────────────────────
 let socket, gameStatus='CONNECTING', mult=1, betState='NONE', betAmt=0;
@@ -700,6 +724,10 @@ function log(txt){const e=document.createElement('div');e.className='le';e.inner
 function wire(){
   socket.on('initial_state',d=>{setBalance(d.balance);log('✅ Systems online. Ready for departure.');});
   socket.on('balance_update',d=>{setBalance(d.balance);log('💰 Balance updated: ZK '+d.balance.toFixed(2));});
+  socket.on('deposit_approved',d=>{log('✅ Deposit of ZK '+d.amount.toFixed(2)+' confirmed!');sfxDeposit();loadTxHistory();});
+  socket.on('deposit_rejected',d=>{log('❌ Deposit rejected: '+d.reason);alert('Your deposit was rejected: '+d.reason);loadTxHistory();});
+  socket.on('withdrawal_sent',d=>{log('💸 ZK '+d.amount.toFixed(2)+' sent to '+d.phone);sfxDeposit();loadTxHistory();});
+  socket.on('withdrawal_cancelled',d=>{log('↩ Withdrawal cancelled and refunded. '+d.reason);loadTxHistory();});
   socket.on('connect_error',()=>{gameStatus='CONNECTING';sl.innerText='Connection failed';AB.className='ab bdis';AB.innerText='RECONNECTING...';BI.setAttribute('disabled','true');stopCD();stopEngine();});
   socket.on('disconnect',()=>{gameStatus='CONNECTING';sl.innerText='Disconnected';AB.className='ab bdis';AB.innerText='RECONNECTING...';BI.setAttribute('disabled','true');stopCD();stopEngine();});
   socket.on('error_message',d=>alert(d.message));
@@ -784,7 +812,7 @@ AB.addEventListener('click',()=>{
   if(gameStatus==='BETTING'&&betState==='NONE'){
     const amt=parseInt(BI.value);
     if(isNaN(amt)||amt<=0){alert('Enter a valid bet amount.');return;}
-    if(amt>walletBalance){openWallet('deposit');return;}
+    if(amt>walletBalance){if(IS_DEMO){socket.emit('demo_refill');}else{openWallet('deposit');}return;}
     betAmt=amt;socket.emit('place_bet',{amount:amt,vehicle});
   }else if(gameStatus==='IN_FLIGHT'&&betState==='PLACED'){
     socket.emit('cash_out');
@@ -806,6 +834,8 @@ function connect(){
 let depNet='airtel', wdNet='airtel', ussdTimer=null, pendingTxRef=null;
 
 function openWallet(tab='deposit'){
+  if(IS_DEMO){showModeSelect();return;}
+  loadPaymentInfo();
   document.getElementById('WO').classList.add('show');
   wSwitchTab(tab);
   loadTxHistory();
@@ -839,107 +869,112 @@ function setAmt(panel,val){
 
 function onDepInput(){
   const amt=parseFloat(document.getElementById('d-amt').value)||0;
-  const phone=document.getElementById('d-phone').value.trim();
-  const btn=document.getElementById('d-btn');
+  const phone=document.getElementById('d-phone').value.replace(/[\s\+\-]/g,'');
+  const ref=document.getElementById('d-txref').value.trim();
   const warn=document.getElementById('d-warn');
-  const fees=document.getElementById('d-fees');
-  const valid=amt>=10&&amt<=10000&&phone.length>=9;
-  btn.disabled=!valid;
+  const okPhone=/^(260\d{9}|0\d{9})$/.test(phone);
+  document.getElementById('d-btn').disabled=!(amt>=MIN_DEP&&amt<=10000&&okPhone&&ref.length>=6);
   if(amt>10000){warn.textContent='⚠ Maximum deposit is ZK 10,000';warn.className='f-warn over';}
-  else if(amt>0&&amt<10){warn.textContent='Minimum deposit is ZK 10';warn.className='f-warn over';}
+  else if(amt>0&&amt<MIN_DEP){warn.textContent='Minimum deposit is ZK '+MIN_DEP;warn.className='f-warn over';}
+  else if(phone.length>0&&!okPhone){warn.textContent='Enter a valid number, e.g. 0971234567';warn.className='f-warn over';}
   else{warn.textContent='';warn.className='f-warn';}
-  if(amt>=10){
-    const fee=Math.round(amt*0.014*100)/100;const net=Math.round((amt-fee)*100)/100;
-    document.getElementById('df-send').textContent='ZK '+amt.toFixed(2);
-    document.getElementById('df-fee').textContent='ZK '+fee.toFixed(2);
-    document.getElementById('df-net').textContent='ZK '+Math.max(0,net).toFixed(2);
-    fees.classList.add('show');
-  }else{fees.classList.remove('show');}
 }
 
 function onWdInput(){
   const amt=parseFloat(document.getElementById('w-amt').value)||0;
-  const phone=document.getElementById('w-phone').value.trim();
-  const btn=document.getElementById('w-btn');
+  const phone=document.getElementById('w-phone').value.replace(/[\s\+\-]/g,'');
+  const okPhone=/^(260\d{9}|0\d{9})$/.test(phone);
+  const total=Math.round((amt+WD_FEE)*100)/100;
   const warn=document.getElementById('w-warn');
   const fees=document.getElementById('w-fees');
-  const valid=amt>=10&&amt<=walletBalance&&phone.length>=9;
-  btn.disabled=!valid;
-  if(amt>walletBalance){warn.textContent=`⚠ Exceeds balance of ZK ${walletBalance.toFixed(2)}`;warn.className='f-warn over';}
-  else if(amt>0&&amt<10){warn.textContent='Minimum withdrawal is ZK 10';warn.className='f-warn over';}
+  document.getElementById('w-btn').disabled=!(amt>=MIN_WD&&total<=walletBalance&&okPhone);
+  if(amt>0&&amt<MIN_WD){warn.textContent='Minimum withdrawal is ZK '+MIN_WD;warn.className='f-warn over';}
+  else if(amt>0&&total>walletBalance){warn.textContent='⚠ You need ZK '+total.toFixed(2)+' (incl. ZK '+WD_FEE+' fee). Balance: ZK '+walletBalance.toFixed(2);warn.className='f-warn over';}
+  else if(phone.length>0&&!okPhone){warn.textContent='Enter a valid number, e.g. 0971234567';warn.className='f-warn over';}
   else{warn.textContent='';warn.className='f-warn';}
-  if(amt>=10&&amt<=walletBalance){
+  if(amt>=MIN_WD){
     document.getElementById('wf-amt').textContent='ZK '+amt.toFixed(2);
-    document.getElementById('wf-fee').textContent='ZK 3.00';
-    document.getElementById('wf-net').textContent='ZK '+Math.max(0,amt-3).toFixed(2);
+    document.getElementById('wf-fee').textContent='ZK '+WD_FEE.toFixed(2);
+    document.getElementById('wf-net').textContent='ZK '+total.toFixed(2);
     fees.classList.add('show');
   }else{fees.classList.remove('show');}
+}
+
+// Chips: "all" for withdrawals leaves room for the fee
+function setAmt(panel,val){
+  const isW=panel==='w';
+  const v=val==='all'?Math.max(0,Math.floor((walletBalance-WD_FEE)*100)/100):val;
+  document.getElementById(isW?'w-amt':'d-amt').value=v;
+  document.querySelectorAll(isW?'#wpanel-withdraw .chip':'#wpanel-deposit .chip').forEach(c=>
+    c.classList.toggle('sel',c.id==='chip-all'?val==='all':parseFloat(c.textContent.replace(/[^0-9.]/g,''))===v));
+  if(isW)onWdInput();else onDepInput();
+}
+
+const MIN_DEP=20, MIN_WD=20, WD_FEE=3;
+let PAY=null;
+
+async function loadPaymentInfo(){
+  try{
+    const r=await fetch(`${SERVER}/api/payment-info`);
+    PAY=await r.json();
+    renderDepNets();
+  }catch(e){
+    showSMsg('d','error','Could not load payment details. Check your connection.');
+  }
+}
+
+function renderDepNets(){
+  const grid=document.getElementById('dnet-grid');
+  grid.innerHTML='';
+  const nets=[['airtel','A','ni-air','Airtel Money'],['mtn','M','ni-mtn','MTN MoMo']].filter(n=>PAY&&PAY[n[0]]);
+  if(!nets.length){grid.textContent='Deposits are temporarily unavailable.';return;}
+  nets.forEach(n=>{
+    const d=document.createElement('div');
+    d.className='net-opt';d.id='dnet-'+n[0];
+    d.innerHTML=`<div class="net-icon ${n[2]}">${n[1]}</div><div><div class="net-name">${n[3]}</div><div class="net-sub">Zambia · ZMW</div></div>`;
+    d.onclick=()=>selDepNet(n[0]);
+    grid.appendChild(d);
+  });
+  selDepNet(PAY[depNet]?depNet:nets[0][0]);
+}
+
+function selDepNet(n){
+  depNet=n;
+  document.querySelectorAll('#dnet-grid .net-opt').forEach(o=>o.classList.toggle('sel',o.id==='dnet-'+n));
+  if(PAY&&PAY[n]){
+    document.getElementById('pay-num').textContent=PAY[n].number;
+    document.getElementById('pay-name').textContent=PAY[n].name;
+    document.getElementById('pay-net').textContent=PAY[n].network;
+  }
+  onDepInput();
+}
+
+function copyText(id,btn){
+  const t=document.getElementById(id).textContent;
+  if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>{btn.textContent='Copied ✓';setTimeout(()=>btn.textContent='Copy',1800);},()=>{});
 }
 
 async function doDeposit(){
   const amt=parseFloat(document.getElementById('d-amt').value);
   const phone=document.getElementById('d-phone').value.trim();
+  const ref=document.getElementById('d-txref').value.trim();
   const btn=document.getElementById('d-btn');
   btn.disabled=true;
-  showSMsg('d','pending','Sending prompt to your phone...');
+  showSMsg('d','pending','Submitting your payment details…');
   try{
-    const res=await fetch(`${SERVER}/api/deposit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({player_id:PLAYER_ID,amount:amt,phone:phone.replace(/\s/g,''),operator:depNet,currency:'ZMW'})});
+    const res=await fetch(`${SERVER}/api/deposit-request`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({player_id:PLAYER_ID,amount:amt,phone:phone.replace(/[\s\+\-]/g,''),operator:depNet,player_tx_ref:ref})});
     const data=await res.json();
-    if(data.status==='pending'){
-      pendingTxRef=data.tx_ref;
-      document.getElementById('ussd-ph').textContent=phone;
-      document.getElementById('ussd-net').textContent=depNet==='airtel'?'Airtel Money':'MTN MoMo';
-      document.getElementById('d-ussd').classList.add('show');
-      showSMsg('d','pending','Waiting for your phone approval...');
-      startUssdTimer(120,data.tx_ref);
+    if(data.status==='submitted'){
+      showSMsg('d','success',data.message);
+      ['d-amt','d-phone','d-txref'].forEach(i=>document.getElementById(i).value='');
+      document.querySelectorAll('#wpanel-deposit .chip').forEach(c=>c.classList.remove('sel'));
+      loadTxHistory();
     }else{
-      showSMsg('d','error',data.message||'Payment failed. Please try again.');
+      showSMsg('d','error',data.error||data.message||'Could not submit. Please try again.');
       btn.disabled=false;
     }
-  }catch(e){showSMsg('d','error','Could not reach payment server. Check connection.');btn.disabled=false;}
-}
-
-function startUssdTimer(secs,txRef){
-  let rem=secs;
-  clearInterval(ussdTimer);
-  const fill=document.getElementById('ussd-fill');
-  ussdTimer=setInterval(async()=>{
-    rem--;
-    document.getElementById('ussd-cd').textContent=rem+'s';
-    fill.style.width=(rem/secs*100)+'%';
-    // Poll every 5 seconds
-    if(txRef&&rem%5===0){
-      try{
-        const r=await fetch(`${SERVER}/api/verify-payment?tx_ref=${txRef}&player_id=${PLAYER_ID}`);
-        const d=await r.json();
-        if(d.status==='successful'){
-          clearInterval(ussdTimer);
-          onDepositSuccess(d.amount||d.newBalance);
-          return;
-        }
-      }catch(e){}
-    }
-    if(rem<=0){
-      clearInterval(ussdTimer);
-      document.getElementById('d-ussd').classList.remove('show');
-      showSMsg('d','error','Payment timed out. Please try again.');
-      document.getElementById('d-btn').disabled=false;
-    }
-  },1000);
-}
-
-function onDepositSuccess(amount){
-  clearInterval(ussdTimer);
-  document.getElementById('d-ussd').classList.remove('show');
-  showSMsg('d','success',`ZK ${parseFloat(amount).toFixed(2)} added to your wallet! 🎉`);
-  document.getElementById('d-btn').disabled=false;
-  document.getElementById('d-amt').value='';
-  document.getElementById('d-fees').classList.remove('show');
-  sfxDeposit();
-  if(navigator.vibrate)navigator.vibrate([40,30,80]);
-  // Fetch fresh balance from server
-  fetch(`${SERVER}/api/balance?player_id=${PLAYER_ID}`).then(r=>r.json()).then(d=>setBalance(d.balance)).catch(()=>{});
-  loadTxHistory();
+  }catch(e){showSMsg('d','error','Could not reach the server. Check your connection.');btn.disabled=false;}
 }
 
 async function doWithdraw(){
@@ -947,21 +982,22 @@ async function doWithdraw(){
   const phone=document.getElementById('w-phone').value.trim();
   const btn=document.getElementById('w-btn');
   btn.disabled=true;
-  showSMsg('w','pending','Initiating transfer...');
+  showSMsg('w','pending','Submitting withdrawal request…');
   try{
-    const res=await fetch(`${SERVER}/api/withdraw`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({player_id:PLAYER_ID,amount:amt,phone:phone.replace(/\s/g,''),operator:wdNet,currency:'ZMW'})});
+    const res=await fetch(`${SERVER}/api/withdraw-request`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({player_id:PLAYER_ID,amount:amt,phone:phone.replace(/[\s\+\-]/g,''),operator:wdNet})});
     const data=await res.json();
-    if(data.status==='success'){
+    if(data.status==='submitted'){
       setBalance(data.newBalance);
-      showSMsg('w','success',`ZK ${amt.toFixed(2)} sent! Arrives within 5 minutes. ✅`);
+      showSMsg('w','success',data.message);
       document.getElementById('w-amt').value='';
       document.getElementById('w-fees').classList.remove('show');
       loadTxHistory();
     }else{
-      showSMsg('w','error',data.message||data.error||'Withdrawal failed. Please try again.');
+      showSMsg('w','error',data.error||data.message||'Request failed. Please try again.');
       btn.disabled=false;
     }
-  }catch(e){showSMsg('w','error','Could not reach server. Check connection.');btn.disabled=false;}
+  }catch(e){showSMsg('w','error','Could not reach the server. Check your connection.');btn.disabled=false;}
 }
 
 function showSMsg(panel,type,msg){
@@ -982,30 +1018,59 @@ async function loadTxHistory(){
     list.innerHTML='';
     const icons={deposit:'💚',withdraw:'💸',win:'🏆',bet:'🎰',loss:'💨'};
     txs.forEach(tx=>{
-      const isPos=['deposit','win'].includes(tx.type);
+      const isPos=(tx.type==='win')||(tx.type==='demo_credit')||(tx.type==='deposit'&&tx.status==='completed');
       const amt=tx.type==='win'?tx.amount:tx.type==='deposit'?tx.amount:tx.amount;
       const el=document.createElement('div');el.className='tx-item';
       el.innerHTML=`<div class="tx-icon ${tx.type}">${icons[tx.type]||'💳'}</div>
         <div class="tx-info"><div class="tx-lbl">${txLabel(tx)}</div><div class="tx-meta">${new Date(tx.createdAt).toLocaleString()}</div></div>
-        <div><div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':'-'}ZK ${parseFloat(amt).toFixed(2)}</div><div class="tx-st ${tx.status}">${tx.status}</div></div>`;
+        <div><div class="tx-amt ${isPos?'pos':(tx.type==='deposit'?'':'neg')}">${isPos?'+':(tx.type==='deposit'?'':'-')}ZK ${parseFloat(amt).toFixed(2)}</div><div class="tx-st ${tx.status}">${tx.status}</div></div>`;
       list.appendChild(el);
     });
   }catch(e){list.innerHTML='<div class="tx-empty"><div class="ei">⚠️</div><p>Could not load transactions.</p></div>';}
 }
 
 function txLabel(tx){
-  if(tx.type==='deposit')return `${tx.operator==='airtel'?'Airtel Money':'MTN MoMo'} Deposit`;
-  if(tx.type==='withdraw')return `${tx.operator==='airtel'?'Airtel Money':'MTN MoMo'} Withdrawal`;
+  const net=tx.operator==='airtel'?'Airtel Money':tx.operator==='mtn'?'MTN MoMo':'Mobile Money';
+  if(tx.type==='deposit')return tx.status==='pending'?`${net} Deposit · awaiting confirmation`:tx.status==='rejected'?`${net} Deposit · rejected`:`${net} Deposit`;
+  if(tx.type==='withdraw_request')return tx.status==='cancelled'?`${net} Withdrawal · refunded`:`${net} Withdrawal · processing`;
+  if(tx.type==='withdraw')return `${net} Withdrawal · sent`;
+  if(tx.type==='demo_credit')return 'Demo play money';
   if(tx.type==='win')return `Win — ${tx.atMultiplier}x Cashout`;
   if(tx.type==='bet')return 'Flight Ticket';
   if(tx.type==='loss')return 'Flight Lost';
   return 'Transaction';
 }
 
+// ── Mode (demo / real) ─────────────────────────
+function showModeSelect(){document.getElementById('MO').classList.add('show');}
+function chooseMode(m){
+  if(m==='real'&&!confirm('Real-money play is for adults (18+) only.\n\nPress OK to confirm you are 18 or older.'))return;
+  if(m===MODE){document.getElementById('MO').classList.remove('show');return;}
+  localStorage.setItem('kba_mode',m);
+  sessionStorage.setItem('kba_skip_intro','1');
+  location.reload();
+}
+function applyModeUI(){
+  if(IS_DEMO){
+    const b=document.getElementById('deposit-btn');
+    b.innerHTML='🎮 DEMO · Play for real';
+    const nudge=document.querySelector('#low-nudge');
+    nudge.querySelector('p').innerHTML='<strong>Out of play money?</strong> Get a fresh ZK 5,000.';
+    const nb=nudge.querySelector('button');
+    nb.textContent='Refill demo balance';
+    nb.onclick=()=>socket&&socket.emit('demo_refill');
+  }
+}
+function initMode(){
+  if(MODE!=='demo'&&MODE!=='real'){showModeSelect();return;}
+  applyModeUI();
+  connect();
+}
+
 // ── Init ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
   resize();window.addEventListener('resize',resize);
-  setupVS();connect();
+  setupVS();initMode();
   requestAnimationFrame(loop);
 });
 </script>
