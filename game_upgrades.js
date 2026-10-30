@@ -5,12 +5,20 @@
   if (typeof loop !== 'function' || typeof resize !== 'function' || typeof ctx === 'undefined') return;
   if (document.readyState === 'complete') return; /* loaded too late to take over the loop */
 
-  var origLoop = loop, origResize = resize;
+  var origLoop = loop, origResize = resize, origUpdatePos = updatePos;
   var LOW = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 4) <= 2;
   var DPR_CAP = LOW ? 1.5 : 2;
   var dprUsed = 1, dm = 1, lastTick = 0, lastTxt = '', fails = 0, TW = 800;
   var layers = [], cityC = null, cloudSp = [], streaks = [];
-  var debris = [], smoke = [], chutes = [];
+  var debris = [], smoke = [], chutes = [], trail = [];
+  var sx = 0, spd = 40, dtF = 0.016, lastF = performance.now();
+  var launchT = -99, cdStart = 0, cdTot = 7, lastRev = 99, mtPulse = 0, flashA = 0, flashCol = '255,255,255', crashV = 0, lastReached = 0;
+  function speedOf(m) { return 90 + 170 * Math.log(Math.max(m, 1)); }          /* px/s, one speed for everything */
+  function climbF(m) { return Math.min(1, Math.log(Math.max(m, 1)) / Math.log(60)); }
+  function colFor(m) {
+    var a = m < 3 ? [0, 229, 255] : m < 8 ? [245, 158, 11] : [239, 68, 68], b = m < 3 ? [245, 158, 11] : [239, 68, 68], k = m < 3 ? (m - 1) / 2 : m < 8 ? (m - 3) / 5 : 1;
+    k = Math.max(0, Math.min(1, k)); return [0, 1, 2].map(function (i) { return Math.round(a[i] + (b[i] - a[i]) * k); }).join(',');
+  }
   var muted = false, autoFired = false, hist = [];
   function $(id) { return document.getElementById(id); }
   function mk(w, h) { var c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; }
@@ -86,7 +94,7 @@
     g.addColorStop(0, 'rgb(' + (6 + t * 22) + ',' + (9 + t * 6) + ',' + (18 + t * 55) + ')');
     g.addColorStop(0.55, 'rgb(' + (14 + t * 38) + ',' + (20 + t * 14) + ',' + (50 + t * 75) + ')');
     g.addColorStop(1, 'rgb(' + (10 + t * 28) + ',' + (15 + t * 10) + ',' + (35 + t * 55) + ')');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = g; ctx.fillRect(-12, -12, W + 24, H + 24);
     if (t < 0.4) {
       var a = 0.17 * (1 - t * 2.5), dg = ctx.createRadialGradient(W * 0.3, H * 0.84, 0, W * 0.3, H * 0.84, H * 0.62);
       dg.addColorStop(0, 'rgba(255,150,80,' + a + ')'); dg.addColorStop(1, 'rgba(255,150,80,0)');
@@ -119,30 +127,89 @@
     [[-0.3, -0.1, 0.18], [0.25, 0.2, 0.22], [0.05, -0.4, 0.12]].forEach(function (c) { ctx.beginPath(); ctx.arc(x + c[0] * r, y + c[1] * r, c[2] * r, 0, 6.2832); ctx.fill(); });
     ctx.restore();
   }
-  function drawClouds2(W, fl) {
-    var sp = fl ? dm * 0.55 : 0.14;
+  function drawClouds2(W) {
     clouds.forEach(function (c, i) {
-      c.x -= c.sp * sp; if (c.x < -c.w - 60) c.x = W + 60;
+      c.x -= spd * c.sp * 0.5 * dtF; if (c.x < -c.w - 60) c.x = W + 60;
       ctx.globalAlpha = Math.min(0.9, c.a * 3.2);
       ctx.drawImage(cloudSp[i % 3], c.x, c.y - c.w * 0.19, c.w * 1.2, c.w * 0.45);
     });
     ctx.globalAlpha = 1;
   }
-  function drawTiled(img, sf, H) { var off = (scrollX * sf) % TW; ctx.drawImage(img, -off, 0, TW, H); ctx.drawImage(img, TW - off, 0, TW, H); }
+  function drawTiled(img, sf, H) { var off = (sx * sf) % TW; ctx.drawImage(img, -off, 0, TW, H); ctx.drawImage(img, TW - off, 0, TW, H); }
   function drawStreaks(W, H) {
-    if (gameStatus !== 'IN_FLIGHT' || dm <= 2) return;
-    ctx.strokeStyle = 'rgba(0,229,255,' + Math.min((dm - 2) * 0.02, 0.12) + ')'; ctx.lineWidth = 0.9; ctx.beginPath();
+    if (gameStatus !== 'IN_FLIGHT' || dm <= 1.5) return;
+    ctx.strokeStyle = 'rgba(0,229,255,' + Math.min((dm - 1.5) * 0.03, 0.16) + ')'; ctx.lineWidth = 0.9; ctx.beginPath();
+    var st = 0.5 + spd / 400;
     streaks.forEach(function (s) {
-      s.x -= s.s * dm * 0.9; if (s.x < -s.l) { s.x = W + Math.random() * 50; s.y = Math.random() * H * 0.8; }
-      ctx.moveTo(s.x, s.y); ctx.lineTo(s.x + s.l, s.y);
+      s.x -= spd * s.s * 1.4 * dtF; if (s.x < -s.l * 2) { s.x = W + Math.random() * 50; s.y = Math.random() * H * 0.8; }
+      ctx.moveTo(s.x, s.y); ctx.lineTo(s.x + s.l * st, s.y);
     });
     ctx.stroke();
   }
+  function updTrail(fl) {
+    for (var i = 0; i < trail.length; i++) trail[i].x -= spd * dtF * 0.9;
+    while (trail.length && trail[0].x < -20) trail.shift();
+    if (fl) { trail.push({ x: cX - 14, y: cY + 12 }); if (trail.length > (LOW ? 50 : 90)) trail.shift(); }
+    else if (gameStatus === 'BETTING') trail.length = 0;
+  }
   function drawTrail() {
-    if (gameStatus !== 'IN_FLIGHT' || pathPts.length < 2) return;
-    ctx.save(); ctx.beginPath(); ctx.moveTo(pathPts[0].x, pathPts[0].y);
-    pathPts.forEach(function (p) { ctx.lineTo(p.x, p.y); });
-    ctx.strokeStyle = dm > 5 ? 'rgba(239,68,68,0.22)' : dm > 2 ? 'rgba(245,158,11,0.2)' : 'rgba(0,229,255,0.16)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.restore();
+    if (trail.length < 2) return;
+    var c = colFor(dm); ctx.save(); ctx.lineCap = 'round';
+    [[7, 0.07], [2.5, 0.3]].forEach(function (w) {
+      ctx.beginPath(); ctx.moveTo(trail[0].x, trail[0].y); for (var i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+      ctx.strokeStyle = 'rgba(' + c + ',' + w[1] + ')'; ctx.lineWidth = w[0]; ctx.stroke();
+    });
+    ctx.restore();
+  }
+  function drawStars2(W, H, fl) {
+    stars.forEach(function (s) {
+      s.x -= spd * s.sp * 0.1 * dtF; if (s.x < -3) { s.x = W + 3; s.y = Math.random() * H * 0.8; }
+      var tw = 0.3 + Math.abs(Math.sin(Date.now() * 0.0009 * (s.l + 1) + s.x * 0.01)) * 0.5;
+      ctx.globalAlpha = s.br * tw * (fl ? Math.min(dm / 2.5, 1) : 0.45); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.2832); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+  function drawWarp(W, H) {
+    if (LOW || gameStatus !== 'IN_FLIGHT' || dm <= 3) return;
+    var a = Math.min((dm - 3) * 0.012, 0.12), cx = W * 0.5, cy = H * 0.55, R = Math.max(W, H) * 0.75;
+    ctx.strokeStyle = 'rgba(200,235,255,' + a + ')'; ctx.lineWidth = 1.2; ctx.beginPath();
+    for (var i = 0; i < 18; i++) {
+      var ang = i * 0.349 + 0.2 * Math.sin(i * 7.1), ph = (sx * 0.0025 + i * 0.173) % 1, r0 = R * (0.3 + ph * 0.65), r1 = r0 + R * 0.06 * (0.4 + ph);
+      ctx.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0); ctx.lineTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+    }
+    ctx.stroke();
+  }
+  function drawVignette(W, H) {
+    var a = 0, col = '239,68,68';
+    if (gameStatus === 'IN_FLIGHT') { a = Math.min(0.04 + (dm - 1) * 0.012, 0.26); col = colFor(dm); }
+    if (crashV > a) { a = crashV; col = '239,68,68'; }
+    if (a < 0.01) return;
+    var g = ctx.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.35, W / 2, H * 0.55, Math.max(W, H) * 0.75);
+    g.addColorStop(0, 'rgba(' + col + ',0)'); g.addColorStop(1, 'rgba(' + col + ',' + a + ')'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  function drawFlash(W, H) { if (flashA < 0.01) return; ctx.fillStyle = 'rgba(' + flashCol + ',' + Math.min(flashA, 0.6) + ')'; ctx.fillRect(0, 0, W, H); }
+  function myUpdate(W, H, fl) {
+    if (fl) {
+      var tX = 115 + (W * 0.56 - 115) * (1 - Math.exp(-(dm - 1) / 6)); cX += (tX - cX) * Math.min(1, dtF * 4);
+      var top = safeTop + 34, bot = Math.min(safeBottom - 90, H * 0.66); tY = bot - (bot - top) * climbF(dm); cY += (tY - cY) * Math.min(1, dtF * 5);
+      rampEngine(mult); if (Math.random() < 0.5 + 0.4 * climbF(dm)) spawnTrail();
+    } else if (gameStatus === 'BETTING') {
+      cX += (115 - cX) * Math.min(1, dtF * 5); tY = H * 0.62 + Math.sin(Date.now() * 0.0033) * 7; cY += (tY - cY) * Math.min(1, dtF * 7);
+    }
+  }
+  function whoosh() {
+    if (muted) return;
+    safe(function () {
+      var a = ac(), len = a.sampleRate * 0.7, b = a.createBuffer(1, len, a.sampleRate), d = b.getChannelData(0);
+      for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / len);
+      var s = a.createBufferSource(); s.buffer = b; var f = a.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.2;
+      f.frequency.setValueAtTime(300, a.currentTime); f.frequency.exponentialRampToValueAtTime(3000, a.currentTime + 0.65);
+      var g = a.createGain(); g.gain.value = 0.22; s.connect(f); f.connect(g); g.connect(a.destination); s.start();
+    });
+  }
+  function launchFX() {
+    for (var i = 0; i < (LOW ? 12 : 26); i++) particles.push({ x: cX - 10, y: cY + 14, vx: -(Math.random() * 5 + 1), vy: (Math.random() - 0.3) * 3, r: 2 + Math.random() * 3, col: 'rgba(255,200,120,0.9)', a: 1, d: 0.03 });
+    shockwaves.push({ x: cX, y: cY, r: 0, maxR: 140, a: 0.5, col: 'rgba(255,255,255,' });
   }
   function drawGauge(W, H) {
     if (gameStatus !== 'IN_FLIGHT') return;
@@ -150,7 +217,7 @@
     ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1);
     for (var i = 0; i <= 6; i++) { var yy = y0 + (y1 - y0) * i / 6; ctx.moveTo(x - 4, yy); ctx.lineTo(x, yy); }
     ctx.stroke();
-    var f = Math.min(1, Math.log(Math.max(dm, 1)) / Math.log(50)), my = y1 - (y1 - y0) * f;
+    var f = climbF(dm), my = y1 - (y1 - y0) * f;
     ctx.fillStyle = '#22d3ee'; ctx.beginPath(); ctx.moveTo(x - 4, my); ctx.lineTo(x - 11, my - 5); ctx.lineTo(x - 11, my + 5); ctx.closePath(); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '600 9px Inter,sans-serif'; ctx.textAlign = 'right';
     ctx.fillText('ALT ' + Math.round((dm - 1) * 180).toLocaleString() + ' m', x + 6, y0 - 7); ctx.restore();
@@ -191,29 +258,49 @@
   }
 
   function newLoop() {
-    var real = mult;
+    var real = mult, now = performance.now();
+    dtF = Math.min((now - lastF) / 1000, 0.05); lastF = now;
     try {
       var W = canvas.width / dprUsed, H = canvas.height / dprUsed;
       if (W > 2 && cityC) {
         stepDisp(); mult = dm;
-        var fl = gameStatus === 'IN_FLIGHT', t = fl ? Math.min(dm / 18, 1) : 0;
-        ctx.clearRect(0, 0, W, H);
-        drawSky2(W, H, t); drawStars(W, H);
+        var fl = gameStatus === 'IN_FLIGHT', cr = gameStatus === 'CRASHED';
+        spd += ((fl ? speedOf(dm) : cr ? 0 : 40) - spd) * Math.min(1, dtF * (cr ? 14 : fl ? 4 : 2)); sx += spd * dtF;
+        var t = fl ? Math.min(dm / 18, 1) : 0;
+        if (typeof reached !== 'undefined' && reached.size !== lastReached) { if (reached.size > lastReached) { mtPulse = 0.1; flashA = Math.max(flashA, 0.12); flashCol = '168,85,247'; } lastReached = reached.size; }
+        var cdRem = gameStatus === 'BETTING' ? cdTot - (now - cdStart) / 1000 : 99, sec = Math.ceil(cdRem);
+        if (cdRem > 0 && sec <= 3 && sec !== lastRev) { lastRev = sec; tone(60 + (4 - sec) * 30, 0.5, 'sawtooth', 0.06); }
+        var z = fl ? 1 + 0.045 * Math.min(1, Math.log(dm) / Math.log(30)) : 1, age = (now - launchT) / 1000;
+        z += 0.07 * Math.exp(-Math.max(age, 0) * 7) * (age >= 0 && age < 2 ? 1 : 0) + mtPulse * 0.25;
+        var jx = 0, jy = 0; if (!LOW && fl && dm >= 8) { var sh = Math.min((dm - 8) * 0.03, 1.2); jx = (Math.random() - 0.5) * 2 * sh; jy = (Math.random() - 0.5) * 2 * sh; }
+        updTrail(fl); if (!cr) myUpdate(W, H, fl);
+        ctx.clearRect(0, 0, W, H); ctx.save();
+        ctx.translate(W / 2 + jx, H * 0.55 + jy); ctx.scale(z, z); ctx.translate(-W / 2, -H * 0.55);
+        drawSky2(W, H, t); drawStars2(W, H, fl);
         if (!LOW && t < 0.3) drawRays(W, H, t);
-        drawMoon(W, H); drawClouds2(W, fl);
-        drawTiled(layers[0], 0.07, H); drawTiled(layers[1], 0.035, H); drawTiled(cityC, 0.018, H);
-        drawStreaks(W, H); drawTrail();
+        drawMoon(W, H); drawClouds2(W);
+        drawTiled(layers[0], 0.10, H); drawTiled(layers[1], 0.05, H); drawTiled(cityC, 0.30, H);
+        drawStreaks(W, H); drawWarp(W, H); drawTrail();
         drawShockwaves(); drawParticles(); drawCoins(); drawFX(H);
-        if (gameStatus !== 'CRASHED') drawCraft(W, H);
-        drawGauge(W, H);
-        if (fl) { var s = dm.toFixed(2) + 'x'; if (s !== lastTxt) { mt.innerText = s; lastTxt = s; } } else lastTxt = '';
+        if (!cr) {
+          var rx = 0, ry = 0; if (cdRem > 0 && cdRem <= 3) { var k = (3 - cdRem) / 3; rx = (Math.random() - 0.5) * 3 * k; ry = (Math.random() - 0.5) * 3 * k; }
+          var tilt = fl ? -(0.04 + 0.14 * climbF(dm)) + Math.sin(now * 0.004) * 0.012 : 0;
+          ctx.save(); ctx.translate(cX + rx, cY + ry); ctx.rotate(tilt); ctx.translate(-cX, -cY); drawCraft(W, H); ctx.restore();
+        }
+        ctx.restore();
+        drawVignette(W, H); drawGauge(W, H); drawFlash(W, H);
+        flashA = Math.max(0, flashA - dtF * 2.2); crashV = Math.max(0, crashV - dtF * 0.6); mtPulse *= Math.exp(-dtF * 6);
+        if (fl) {
+          var s = dm.toFixed(2) + 'x'; if (s !== lastTxt) { mt.innerText = s; lastTxt = s; }
+          mt.style.transform = 'scale(' + (1 + 0.06 * Math.min(1, Math.log(dm) / Math.log(20)) + mtPulse).toFixed(3) + ')';
+        } else { lastTxt = ''; if (mt.style.transform) mt.style.transform = ''; }
         fails = 0;
       }
     } catch (e) {
       if (++fails >= 3) {
         mult = real; try { console.warn('[upgrades] falling back to original renderer', e); } catch (_) {}
-        loop = origLoop; resize = origResize; origResize(); window.removeEventListener('resize', newResize);
-        window.addEventListener('resize', origResize); requestAnimationFrame(origLoop); return;
+        loop = origLoop; resize = origResize; updatePos = origUpdatePos; try { mt.style.transform = ''; } catch (_) {}
+        origResize(); window.removeEventListener('resize', newResize); window.addEventListener('resize', origResize); requestAnimationFrame(origLoop); return;
       }
     }
     mult = real;
@@ -284,10 +371,14 @@
       var a = $('kbauto'), t = a ? parseFloat(a.value) : 0;
       if (betState === 'PLACED' && !autoFired && t >= 1.1 && d.multiplier >= t) { autoFired = true; s.emit('cash_out'); notice('Auto cash-out at ' + t.toFixed(2) + 'x'); }
     });
-    s.on('betting_phase_started', function () { autoFired = false; });
+    s.on('betting_phase_started', function (d) { autoFired = false; cdStart = performance.now(); cdTot = (d && d.countdown) || 7; lastRev = 99; });
+    s.on('game_started', function () { launchT = performance.now(); flashA = 0.2; flashCol = '255,255,255'; launchFX(); whoosh(); });
     s.on('bet_confirmed', function () { autoFired = false; });
-    s.on('cash_out_success', function () { chuteFX(cX, cY); });
-    s.on('game_crashed', function (d) { hist.push(+d.crashedAt); hist = hist.slice(-20); try { localStorage.setItem('kbx_hist', JSON.stringify(hist)); } catch (e) {} renderHist(); });
+    s.on('cash_out_success', function () { chuteFX(cX, cY); flashA = 0.22; flashCol = '251,191,36'; mtPulse = 0.08; });
+    s.on('game_crashed', function (d) {
+      if (betState === 'PLACED') { crashV = 0.42; flashA = 0.4; flashCol = '255,255,255'; } else crashV = 0.16;
+      tone(48, 0.7, 'sine', 0.25);
+      hist.push(+d.crashedAt); hist = hist.slice(-20); try { localStorage.setItem('kbx_hist', JSON.stringify(hist)); } catch (e) {} renderHist(); });
     s.on('ledger_update', function (d) {
       var txt = typeof d === 'string' ? d : (d && d.message) || '', m = /^(\S+) secured ZK ([\d.,]+) at ([\d.]+)x/.exec(txt);
       if (m) callout((m[1] === me ? 'You' : m[1]) + ' · ' + m[3] + 'x · ZK ' + m[2], m[1] === me);
@@ -310,7 +401,7 @@
     '.kbfl{position:absolute;z-index:5;pointer-events:none;font-size:.74rem;font-weight:800;padding:4px 10px;border-radius:99px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.35);color:#6ee7b7;animation:kbfloat 2.6s ease-out forwards;white-space:nowrap}' +
     '.kbfl.me{background:rgba(251,191,36,.2);border-color:rgba(251,191,36,.5);color:#fde68a}' +
     '@keyframes kbfloat{0%{opacity:0;transform:translateY(8px)}15%{opacity:1}100%{opacity:0;transform:translateY(-46px)}}' +
-    '.kbshake{animation:screenShake .42s}';
+    '.kbshake{animation:screenShake .42s}#mt{transform-origin:50% 60%}';
 
   function ui() {
     var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
@@ -341,6 +432,6 @@
   }
 
   safe(ui);
-  resize = newResize; loop = newLoop;
-  window.__kbu = { fails: function () { return fails; }, low: LOW };
+  resize = newResize; loop = newLoop; updatePos = function () {};
+  window.__kbu = { fails: function () { return fails; }, low: LOW, spd: function () { return spd; }, dm: function () { return dm; }, cx: function () { return cX; }, sx: function () { return sx; } };
 })();
