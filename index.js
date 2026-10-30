@@ -137,7 +137,8 @@ const supabase     = SUPABASE_URL && SUPABASE_KEY
 const memPlayers = new Map();
 
 async function getPlayer(id) {
-    if (supabase) {
+    // Demo accounts hold play money only, so they live in memory and never touch the database
+    if (supabase && !id.startsWith('demo_')) {
         const { data, error } = await supabase
             .from('players').select('*').eq('id', id).single();
         if (error && error.code === 'PGRST116') {
@@ -145,7 +146,7 @@ async function getPlayer(id) {
             await supabase.from('players').insert(fresh);
             return { balance: 0, transactions: [], pendingDeposits: {} };
         }
-        if (error) throw error;
+        if (error) { console.error('[Supabase] getPlayer error:', error.code, error.message); throw error; }
         return {
             balance:         parseFloat(data.balance),
             transactions:    data.transactions     || [],
@@ -161,7 +162,7 @@ async function getPlayer(id) {
 async function savePlayer(id, player) {
     // Keep transaction history capped at 200 entries
     player.transactions = player.transactions.slice(0, 200);
-    if (supabase) {
+    if (supabase && !id.startsWith('demo_')) {
         const { error } = await supabase.from('players').upsert({
             id,
             balance:          player.balance,
