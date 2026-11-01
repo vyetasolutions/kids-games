@@ -71,6 +71,12 @@
     } catch (e) {}
   }
   function render() {
+    if (REAL) {
+      if (rankEl) rankEl.textContent = '\uD83D\uDEE1 Play safe';
+      if (xpEl) xpEl.textContent = '';
+      if (open) root.querySelector('#kbx-p').innerHTML = rgHtml();
+      return;
+    }
     var r = rankOf(S.xp);
     if (rankEl) rankEl.textContent = '🎖 ' + r.name;
     if (xpEl) xpEl.textContent = S.xp + ' XP';
@@ -166,16 +172,18 @@
     }
   }
   function rgHook(sock) {
-    var pend = 0, orig = sock.emit;
+    var pend = 0, pendB = 0, orig = sock.emit;
     sock.emit = function (ev, data) {
-      if (ev === 'place_bet') {
+      if (ev === 'place_bet' || ev === 'place_bet_b') {
         var m = blocked(); if (m) { toast(m); return sock; }
-        pend = parseFloat(data && data.amount) || 0;
+        if (ev === 'place_bet_b') pendB = parseFloat(data && data.amount) || 0; else pend = parseFloat(data && data.amount) || 0;
       }
       return orig.apply(sock, arguments);
     };
     sock.on('bet_confirmed', function () { R.bets += pend; pend = 0; saveR(); render(); });
     sock.on('cash_out_success', function (d) { R.pay += +d.payout || 0; saveR(); render(); });
+    sock.on('bet_b_confirmed', function () { R.bets += pendB; pendB = 0; saveR(); render(); });
+    sock.on('cash_out_b_success', function (d) { R.pay += +d.payout || 0; saveR(); render(); });
     root.addEventListener('click', rgActions);
     setInterval(function () {
       R.mins++; saveR();
@@ -231,7 +239,7 @@
   }
 
   function init() {
-    try { REAL = !IS_DEMO; newDay(); build(); if (REAL) rgHook(socket); render(); hook(socket); save(); } catch (e) { try { console.warn('[kbx] disabled', e); } catch (_) {} }
+    try { REAL = !IS_DEMO; if (!REAL) newDay(); build(); if (REAL) rgHook(socket); render(); if (!REAL) { hook(socket); save(); } } catch (e) { try { console.warn('[kbx] disabled', e); } catch (_) {} }
   }
   /* wait for the page's globals; run only in Demo mode */
   var tries = 0, iv = setInterval(function () {

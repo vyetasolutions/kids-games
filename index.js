@@ -136,7 +136,19 @@ const supabase     = SUPABASE_URL && SUPABASE_KEY
 
 const memPlayers = new Map();
 
-async function getPlayer(id) {
+// ── Player store ─────────────────────────────────────────────────
+// ONE shared in-memory object per player. Every read returns the same object, so things
+// that happen at the same instant (two bets, two cash-outs, a double-tapped withdrawal)
+// all update the SAME balance instead of overwriting each other with stale copies.
+// Database writes are queued per player so they always land in order.
+// NOTE: this assumes a single server process (Render: 1 instance). Do not scale to several
+// instances without moving to atomic database updates. Editing a balance by hand in the
+// Supabase dashboard while that player is online will be overwritten by the live value.
+const playerCache = new Map();   // id -> { player, last }
+const loadingNow  = new Map();   // id -> Promise (first load in flight)
+const saveChains  = new Map();   // id -> Promise (ordered DB writes)
+
+async function loadPlayer(id) {
     // Demo accounts hold play money only, so they live in memory and never touch the database
     if (supabase && !id.startsWith('demo_')) {
         const { data, error } = await supabase
@@ -159,22 +171,59 @@ async function getPlayer(id) {
     return memPlayers.get(id);
 }
 
+async function getPlayer(id) {
+    const hit = playerCache.get(id);
+    if (hit) { hit.last = Date.now(); return hit.player; }
+    let pr = loadingNow.get(id);
+    if (!pr) {
+        pr = loadPlayer(id)
+            .then(pl => { playerCache.set(id, { player: pl, last: Date.now() }); return pl; })
+            .finally(() => loadingNow.delete(id));
+        loadingNow.set(id, pr);
+    }
+    return pr;
+}
+
 async function savePlayer(id, player) {
     // Keep transaction history capped at 200 entries
     player.transactions = player.transactions.slice(0, 200);
+    playerCache.set(id, { player, last: Date.now() });
     if (supabase && !id.startsWith('demo_')) {
-        const { error } = await supabase.from('players').upsert({
+        // Snapshot NOW so a later change cannot leak into an earlier queued write
+        const row = {
             id,
             balance:          player.balance,
-            transactions:     player.transactions,
-            pending_deposits: player.pendingDeposits,
+            transactions:     JSON.parse(JSON.stringify(player.transactions)),
+            pending_deposits: JSON.parse(JSON.stringify(player.pendingDeposits || {})),
             updated_at:       new Date().toISOString()
-        }, { onConflict: 'id' });
-        if (error) console.error('[Supabase] savePlayer error:', error.message);
-        return;
+        };
+        const prev = saveChains.get(id) || Promise.resolve();
+        const next = prev.then(async () => {
+            try {
+                const { error } = await supabase.from('players').upsert(row, { onConflict: 'id' });
+                if (error) console.error('[Supabase] savePlayer error:', error.message);
+            } catch (e) { console.error('[Supabase] savePlayer threw:', e.message); }
+        });
+        saveChains.set(id, next);
+        next.then(() => { if (saveChains.get(id) === next) saveChains.delete(id); });
+        return next;
     }
     memPlayers.set(id, player);
 }
+
+// Free memory: drop idle players that are not connected (demo accounts are play money, so
+// they are forgotten entirely after an hour of silence).
+setInterval(() => {
+    const connected = new Set();
+    io.sockets.sockets.forEach(sk => connected.add(sk.userId));
+    const now = Date.now();
+    playerCache.forEach((e, id) => {
+        if (connected.has(id) || saveChains.has(id) || loadingNow.has(id)) return;
+        const idle = now - e.last;
+        if (id.startsWith('demo_')) { if (idle > 3600000) { playerCache.delete(id); memPlayers.delete(id); } }
+        else if (idle > 900000) playerCache.delete(id);
+    });
+}, 300000).unref();
 
 function fmt(n) { return Math.round(parseFloat(n) * 100) / 100; }
 
@@ -198,7 +247,71 @@ let gameStatus        = 'BETTING';
 let currentMultiplier = 1.00;
 let lifecycleInterval = null;
 let crashPoint        = 1.00;
-const activeRoundBets = new Map();
+const activeRoundBets  = new Map();   // bet A
+const activeRoundBetsB = new Map();   // bet B (optional second bet, same round)
+
+// ═══════════════════════════════════════════════════════════════════
+//  HOURLY CUP — Demo (play money) only. Ranking only, no prizes.
+//  Score = net play-money profit across the hour; must place a minimum
+//  number of bets to qualify. Real-money players are never included.
+// ═══════════════════════════════════════════════════════════════════
+const T_MS         = parseInt(process.env.TOURNAMENT_MS, 10) || 3600000;
+const T_MIN_ROUNDS = parseInt(process.env.TOURNAMENT_MIN_ROUNDS, 10) || 5;
+let tourney      = newTourney();
+let lastChampion = null;
+
+function newTourney() {
+    const start = Math.floor(Date.now() / T_MS) * T_MS;
+    return { start, end: start + T_MS, scores: new Map() };
+}
+function demoName(id) { return 'Demo-' + id.slice(5, 9).toUpperCase(); }
+
+// Called when a demo bet resolves: payout 0 = lost, otherwise the cash-out amount
+function tournamentRecord(id, isDemo, stake, payout) {
+    if (!isDemo) return;
+    let e = tourney.scores.get(id);
+    if (!e) { e = { name: demoName(id), net: 0, rounds: 0 }; tourney.scores.set(id, e); }
+    e.net    = fmt(e.net + payout - stake);
+    e.rounds += 1;
+}
+function standings() {
+    return [...tourney.scores.entries()]
+        .map(([id, e]) => ({ id, name: e.name, net: e.net, rounds: e.rounds }))
+        .filter(e => e.rounds >= T_MIN_ROUNDS)
+        .sort((a, b) => b.net - a.net || b.rounds - a.rounds);
+}
+function tournamentPayload(id, ranked) {
+    const i = ranked.findIndex(e => e.id === id), mine = tourney.scores.get(id);
+    return {
+        msLeft:    Math.max(0, tourney.end - Date.now()),
+        minRounds: T_MIN_ROUNDS,
+        entrants:  ranked.length,
+        top:       ranked.slice(0, 5).map(e => ({ name: e.name, net: e.net, rounds: e.rounds })),
+        you:       { rank: i >= 0 ? i + 1 : null, net: mine ? mine.net : 0, rounds: mine ? mine.rounds : 0, name: demoName(id) },
+        last:      lastChampion
+    };
+}
+function sendTournament(socket) { socket.emit('tournament_update', tournamentPayload(socket.userId, standings())); }
+function broadcastTournament() {
+    const ranked = standings();
+    io.sockets.sockets.forEach(sk => { if (sk.isDemo) sk.emit('tournament_update', tournamentPayload(sk.userId, ranked)); });
+}
+function tournamentRollover() {
+    if (Date.now() < tourney.end) return;
+    const ranked   = standings();
+    const finished = tourney;
+    lastChampion   = ranked.length ? { name: ranked[0].name, net: ranked[0].net } : null;
+    tourney        = newTourney();
+    io.sockets.sockets.forEach(sk => {
+        if (!sk.isDemo) return;
+        const e = finished.scores.get(sk.userId); if (!e) return;
+        const i = ranked.findIndex(r => r.id === sk.userId);
+        sk.emit('tournament_result', {
+            rank: i >= 0 ? i + 1 : null, of: ranked.length, net: e.net, rounds: e.rounds,
+            minRounds: T_MIN_ROUNDS, champion: lastChampion
+        });
+    });
+}
 
 const HOUSE_EDGE = 0.04;
 
@@ -218,7 +331,7 @@ app.get('/health', (req, res) => {
         status:        'online',
         game_stage:    gameStatus,
         current_mult:  currentMultiplier,
-        active_bets:   activeRoundBets.size,
+        active_bets:   (activeRoundBets.size + activeRoundBetsB.size),
         supabase:      !!supabase,
         rtp:           `${((1 - HOUSE_EDGE) * 100).toFixed(0)}%`,
         house_edge:    `${(HOUSE_EDGE * 100).toFixed(0)}%`,
@@ -481,7 +594,7 @@ app.get('/api/admin/requests', adminAuth, async (req, res) => {
         res.json({
             deposits,
             withdrawals,
-            game: { status: gameStatus, multiplier: currentMultiplier, active_bets: activeRoundBets.size }
+            game: { status: gameStatus, multiplier: currentMultiplier, active_bets: (activeRoundBets.size + activeRoundBetsB.size) }
         });
     } catch (e) {
         console.error('[admin/requests]', e.message);
@@ -796,6 +909,9 @@ io.on('connection', async (socket) => {
         isDemo:       socket.isDemo
     });
 
+    if (socket.isDemo) sendTournament(socket);
+    socket.on('tournament_get', () => { if (socket.isDemo) sendTournament(socket); });
+
     // ── Place Bet ──────────────────────────────────────────────────
     socket.on('place_bet', async (data) => {
         if (gameStatus !== 'BETTING') {
@@ -882,6 +998,7 @@ io.on('connection', async (socket) => {
             return socket.emit('error_message', { message: 'Could not process cash out. Tap again.' });
         }
 
+        tournamentRecord(socket.userId, socket.isDemo, bet.amount, payout);
         socket.emit('cash_out_success', {
             payout,
             atMultiplier: atMult,
@@ -893,13 +1010,88 @@ io.on('connection', async (socket) => {
         );
     });
 
+    // ── Second bet (bet B): an independent slot with the same rules as bet A ──
+    socket.on('place_bet_b', async (data) => {
+        if (gameStatus !== 'BETTING') {
+            return socket.emit('error_message', { message: 'Betting is closed for this round.' });
+        }
+        if (activeRoundBetsB.has(socket.userId)) {
+            return socket.emit('error_message', { message: 'You already placed a second bet this round.' });
+        }
+        const amount = fmt(parseFloat(data && data.amount));
+        if (isNaN(amount) || amount < 1) {
+            return socket.emit('error_message', { message: 'Minimum bet is ZK 1.' });
+        }
+        if (amount > 10000) {
+            return socket.emit('error_message', { message: 'Maximum bet is ZK 10,000.' });
+        }
+        const craft = ['balloon', 'lwango', 'broom'].includes(data.vehicle) ? data.vehicle : 'balloon';
+        activeRoundBetsB.set(socket.userId, {
+            amount, vehicle: craft, callsign: socket.pilotCallsign, isDemo: socket.isDemo
+        });
+
+        let player;
+        try {
+            player = await getPlayer(socket.userId);
+        } catch (e) {
+            activeRoundBetsB.delete(socket.userId);
+            return socket.emit('error_message', { message: 'Could not verify balance. Try again.' });
+        }
+        if (amount > player.balance) {
+            activeRoundBetsB.delete(socket.userId);
+            return socket.emit('error_message', {
+                message: `Insufficient balance. You have ZK ${player.balance.toFixed(2)}.`
+            });
+        }
+        player.balance = fmt(player.balance - amount);
+        player.transactions.unshift({
+            id: `BET-${uuidv4()}`, type: 'bet', amount, slot: 'B',
+            status: 'placed', createdAt: new Date().toISOString()
+        });
+        await savePlayer(socket.userId, player);
+        socket.emit('bet_b_confirmed', { newBalance: player.balance });
+    });
+
+    socket.on('cash_out_b', async () => {
+        if (gameStatus !== 'IN_FLIGHT') {
+            return socket.emit('error_message', { message: 'No active flight to cash out from.' });
+        }
+        if (!activeRoundBetsB.has(socket.userId)) {
+            return socket.emit('error_message', { message: 'No active second bet found.' });
+        }
+        const bet    = activeRoundBetsB.get(socket.userId);
+        const payout = fmt(bet.amount * currentMultiplier);
+        const atMult = parseFloat(currentMultiplier.toFixed(2));
+        activeRoundBetsB.delete(socket.userId);
+
+        let player;
+        try {
+            player         = await getPlayer(socket.userId);
+            player.balance = fmt(player.balance + payout);
+            player.transactions.unshift({
+                id: `WIN-${uuidv4()}`, type: 'win', amount: payout, slot: 'B',
+                atMultiplier: atMult, status: 'completed', createdAt: new Date().toISOString()
+            });
+            await savePlayer(socket.userId, player);
+        } catch (e) {
+            console.error('[cash_out_b] DB error:', e.message);
+            activeRoundBetsB.set(socket.userId, bet);
+            return socket.emit('error_message', { message: 'Could not process cash out. Tap again.' });
+        }
+        tournamentRecord(socket.userId, socket.isDemo, bet.amount, payout);
+        socket.emit('cash_out_b_success', { payout, atMultiplier: atMult, newBalance: player.balance });
+        io.emit('ledger_update',
+            `${socket.pilotCallsign} secured ZK ${payout.toFixed(2)} at ${atMult.toFixed(2)}x!`
+        );
+    });
+
     // ── Demo refill: free-play players can top their play money back up ──
     let lastRefill = 0;
     socket.on('demo_refill', async () => {
         if (!socket.isDemo) return;
         if (Date.now() - lastRefill < 5000) return;
         lastRefill = Date.now();
-        if (activeRoundBets.has(socket.userId)) return;
+        if (activeRoundBets.has(socket.userId) || activeRoundBetsB.has(socket.userId)) return;
         try {
             const dp = await getPlayer(socket.userId);
             if (dp.balance >= 10) return;
@@ -924,6 +1116,7 @@ io.on('connection', async (socket) => {
 
 function startNewRound() {
     activeRoundBets.clear();
+    activeRoundBetsB.clear();
     gameStatus        = 'BETTING';
     currentMultiplier = 1.00;
     crashPoint        = generateCrashPoint();
@@ -932,6 +1125,8 @@ function startNewRound() {
     console.log(`[Game] New round started`);
 
     io.emit('betting_phase_started', { countdown: 7 });
+    tournamentRollover();
+    broadcastTournament();
     setTimeout(startFlight, 7000);
 }
 
@@ -961,6 +1156,7 @@ async function triggerCrash(at) {
 
     const lossPromises = [];
     activeRoundBets.forEach((bet, playerId) => {
+        tournamentRecord(playerId, bet.isDemo, bet.amount, 0);
         lossPromises.push(
             getPlayer(playerId).then(p => {
                 p.transactions.unshift({
@@ -974,9 +1170,26 @@ async function triggerCrash(at) {
             }).catch(e => console.error('[crash] loss record error:', e.message))
         );
     });
+    activeRoundBetsB.forEach((bet, playerId) => {
+        tournamentRecord(playerId, bet.isDemo, bet.amount, 0);
+        lossPromises.push(
+            getPlayer(playerId).then(p => {
+                p.transactions.unshift({
+                    id:        `LOSS-${uuidv4()}`,
+                    type:      'loss',
+                    amount:    bet.amount,
+                    slot:      'B',
+                    status:    'lost',
+                    createdAt: new Date().toISOString()
+                });
+                return savePlayer(playerId, p);
+            }).catch(e => console.error('[crash] loss record error (B):', e.message))
+        );
+    });
     await Promise.all(lossPromises);
 
     io.emit('game_crashed', { crashedAt: parseFloat(at.toFixed(2)) });
+    broadcastTournament();
     // Log crash point AFTER it has already happened — safe to log now
     console.log(`[Game] Crashed at ${at.toFixed(2)}x`);
 
