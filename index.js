@@ -89,7 +89,7 @@ app.use('/api/admin', adminLimiter);
 const PAYMENT_CONFIG = {
     mtn: {
         number:  process.env.MTN_NUMBER || '0760829950',
-        name:    process.env.PAY_NAME   || 'Suwilanji Puta',
+        name:    process.env.PAY_NAME   || 'Vyeta Digital',
         network: 'MTN MoMo'
     }
 };
@@ -97,7 +97,7 @@ const PAYMENT_CONFIG = {
 if (process.env.AIRTEL_NUMBER) {
     PAYMENT_CONFIG.airtel = {
         number:  process.env.AIRTEL_NUMBER,
-        name:    process.env.PAY_NAME || 'Suwilanji Puta',
+        name:    process.env.PAY_NAME || 'Vyeta Digital',
         network: 'Airtel Money'
     };
 }
